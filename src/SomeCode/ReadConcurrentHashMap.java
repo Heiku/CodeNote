@@ -1,5 +1,7 @@
 package SomeCode;
 
+import java.util.Collections;
+
 public class ReadConcurrentHashMap {
 
     static final int MAXIMUM_CAPACITY = 1 << 30;
@@ -122,5 +124,8 @@ public class ReadConcurrentHashMap {
 
     public static void main(String[] args) {
         System.out.println(tableSizeFor(9));
+
+
+
     }
 }
