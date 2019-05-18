@@ -1,6 +1,4 @@
-package SomeCode;
-
-import java.util.Collections;
+package readSourceCode;
 
 public class ReadConcurrentHashMap {
 
