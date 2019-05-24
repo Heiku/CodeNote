@@ -1,4 +1,4 @@
-package Others.nio;
+package Baisc.nio;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -30,7 +30,8 @@ public class NIOServer {
             ByteBuffer byteBuffer = ByteBuffer.allocate(100);
 
             while (true){
-                selector.select();      // 当前线程阻塞， 直到监听的事件发生，向下执行
+                // Selects a set of keys whose corresponding channels are ready for I/O
+                selector.select();      // 当前线程阻塞， 直到监听的事件发生，向下执行 (选择有I/O 事件的管道信息 (key))
                 Iterator<SelectionKey> keyIter = selector.selectedKeys().iterator();
 
                 // 迭代访问select 得到的 channel 事件

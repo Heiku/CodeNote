@@ -1,13 +1,11 @@
-package Others.nio;
+package Baisc.nio;
 
 /**
  * @Author: Heiku
  * @Date: 2019/5/20
  */
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.net.InetSocketAddress;
 import java.nio.channels.*;
 
