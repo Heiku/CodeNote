@@ -86,6 +86,40 @@ public class BasicClass {
         System.out.println(z3 == z4);
         System.out.println(z5 == z6);
         System.out.println(z7 == z8);
+
+
+        /**
+         * Integer.MIN_VALUE 十六进制为 0x80000000，其符号位为1，其余所有位为0
+         *      public static int abs(int a) {
+         *          return (a < 0) ? -a : a;
+         *      }
+         *
+         *      取负数（反码 + 1）则为 0x7fffffff + 1，也就是 0x80000000，即取负数还是为本身
+         */
+        System.out.println(Math.abs(Integer.MIN_VALUE));
+
+        /**
+         * 这里同理，+ 1的时候，溢出结果变为了负数 Integer.MIN_VALUE
+         *
+         * 那么也就是说 Integer.MIN_VALUE 满足 (i != 0 && i = -i)
+         */
+        System.out.println(Integer.MAX_VALUE + 1 < Integer.MAX_VALUE);
+
+
+        /**
+         * 无穷大的数满足 i = i + 1
+         * 无穷小的数满足 i = i - 1
+         *
+         * NaN (Not a Number) 即， i != i
+         */
+        double d1 = Double.POSITIVE_INFINITY;
+        System.out.println(d1 == d1 + 1);
+        double d2 = Double.NEGATIVE_INFINITY;
+        System.out.println(d2 == d2 - 1);
+
+        double d3 = Double.NaN;
+        System.out.println(d3 != d3);
+
     }
 
 }
