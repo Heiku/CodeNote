@@ -1,10 +1,10 @@
-package Baisc.type;
+package Baisc.type.erase;
 
 /**
  * @Author: Heiku
  * @Date: 2019/7/14
  */
-public class TypeErase{
+public class HasF {
 
     public void f() {
         System.out.println("HasF.f()");
