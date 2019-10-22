@@ -1,6 +1,32 @@
 package Baisc.cpu;
 
 /**
+ * Thread num 0 duration 1
+ * Thread num 1 duration 514
+ * Thread num 2 duration 588
+ * Thread num 3 duration 767
+ * Thread num 4 duration 802
+ * Thread num 5 duration 789
+ * Thread num 6 duration 770
+ * Thread num 7 duration 871
+ * Thread num 8 duration 943
+ * Thread num 9 duration 1095
+ *
+ *
+ * Thread num 0 duration 1
+ * Thread num 1 duration 529
+ * Thread num 2 duration 1825
+ * Thread num 3 duration 1914
+ * Thread num 4 duration 2261
+ * Thread num 5 duration 3791
+ * Thread num 6 duration 4415
+ * Thread num 7 duration 4005
+ * Thread num 8 duration 4140
+ * Thread num 9 duration 3337
+ *
+ *
+ * 性能差距接近5倍  Java8中可以直接使用 @Contended 避免伪共享
+ *
  * @Author: Heiku
  * @Date: 2019/10/21
  */
@@ -9,7 +35,7 @@ public class FalseSharing implements Runnable {
     public final static long ITERATIONS = 500L * 1000L * 100L;
     private int arrayIndex = 0;
 
-    private static ValuePadding[] longs;
+    private static ValueNoPadding[] longs;
     public FalseSharing(final int arrayIndex){
         this.arrayIndex = arrayIndex;
     }
@@ -27,9 +53,9 @@ public class FalseSharing implements Runnable {
 
     private static void runTest(int NUM_THREADS) throws InterruptedException{
         Thread[] threads = new Thread[NUM_THREADS];
-        longs = new ValuePadding[NUM_THREADS];
+        longs = new ValueNoPadding[NUM_THREADS];
         for (int i = 0; i < longs.length; i++){
-            longs[i] = new ValuePadding();
+            longs[i] = new ValueNoPadding();
         }
 
         for (int i = 0; i < threads.length; i++){

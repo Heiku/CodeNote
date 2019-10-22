@@ -21,7 +21,10 @@ public class ThreadJoinTest {
             t.start();
 
             try {
-                //
+                // 这里主线程 main 获得了 线程t对象的锁，并在 t.join()里执行了 t.wait()，即挂起了主线程
+                // 线程对象t 的 notify() 是在 JVM 源码中的 JavaThread::exit() 中的lock.notify_all(thread) 施放对象t的锁
+                // 这样 main线程就可以继续执行
+                // 原则：谁运行 t.join() 就阻塞谁
                 t.join();
             }catch (InterruptedException e){
                 e.printStackTrace();
