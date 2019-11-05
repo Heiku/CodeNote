@@ -25,7 +25,7 @@ public class FileChannelDemo {
     public static void main(String[] args) {
 
         try {
-            FileChannel channel = new RandomAccessFile("D:\\tmp\\filestore\\note.txt", "rw").getChannel();
+            FileChannel channel = new RandomAccessFile("C:\\Users\\DELL\\Desktop\\note.txt", "rw").getChannel();
             channel.position(channel.size());   // position 指向文件末尾
 
             ByteBuffer byteBuffer = ByteBuffer.allocate(100);
@@ -45,13 +45,14 @@ public class FileChannelDemo {
 
             byteBuffer.clear();
             // channel -> byteBuffer
+            int n = 0;
             while(channel.read(byteBuffer) != -1 || byteBuffer.position() > 0){
                 byteBuffer.flip();
 
                 // UTF-8 解码器
                 charBuffer.clear();
                 decoder.decode(byteBuffer, charBuffer, false);
-                System.out.println(charBuffer.flip().toString());
+                System.out.println(charBuffer.flip().toString() + ", n = " + n++);
 
                 byteBuffer.compact();   // 处理剩余
             }
