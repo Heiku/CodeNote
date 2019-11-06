@@ -9,6 +9,13 @@ import java.nio.charset.CharsetDecoder;
 import java.nio.charset.StandardCharsets;
 
 /**
+ * FileChannel
+ *
+ *      FileChannel & ByteBuffer 中间相隔一层 PageCache，即 PageCache 是用户内存和磁盘之间的一层缓存，利用缓存，提高了 IO 性能
+ *      FileChannel
+ *
+ *
+ *
  * @Author: Heiku
  * @Date: 2019/5/20
  */
