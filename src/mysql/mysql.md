@@ -1,10 +1,9 @@
 
-
-
-[MySQL的InnoDB索引原理详解](https://kyle.ai/blog/6439.html)
-[MySQL索引背后的数据结构及算法原理](http://blog.codinglabs.org/articles/theory-of-mysql-index.html)
-[MySQL索引原理及慢查询优化](https://tech.meituan.com/2014/06/30/mysql-index.html)
-[高性能 MySQL]()
+### 引用
+[MySQL的InnoDB索引原理详解](https://kyle.ai/blog/6439.html)  
+[MySQL索引背后的数据结构及算法原理](http://blog.codinglabs.org/articles/theory-of-mysql-index.html)  
+[MySQL索引原理及慢查询优化](https://tech.meituan.com/2014/06/30/mysql-index.html)  
+[高性能 MySQL]()  
 
 
 ### 范式
@@ -179,7 +178,7 @@ MySQL中的倒排索引是基于红黑树实现的，同时Mysql的全文索引�
 当没有使用到索引排序，MySQL需要自己进行排序。
 * 如果数据量小则在内存中进行（小于排序缓冲区），MySQL在内存中进行“快速排序”
 * 如果数据量大的时候则需要使用到磁盘排序（文件排序 fileSort），先将数据分块，对每个独立的块使用 “快速排序” 进行排序，并将各个块的排序结果保存在磁盘上，
-然后将哥哥排序号的块在进行 merge。最后返回排序结果 
+然后将各个排序号的块在进行 merge。最后返回排序结果 
 
 ### 设计
 
