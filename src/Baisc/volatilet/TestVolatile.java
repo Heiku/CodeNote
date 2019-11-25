@@ -30,11 +30,13 @@ public class TestVolatile extends  Thread{
     public static void main(String[] args) throws InterruptedException {
         TestVolatile t = new TestVolatile();
         t.start();
+/*
         try {
             Thread.sleep(1000);
         }catch (InterruptedException e){
             e.printStackTrace();
         }
+*/
 
         t.setFlag(false);
         System.out.println("main already set flag to false");

@@ -120,6 +120,17 @@ public class BasicClass {
         double d3 = Double.NaN;
         System.out.println(d3 != d3);
 
+
+        /**
+         * Min Short: -32768,
+         * Max Short: 32777
+         */
+       /* var maxShort = Short.MAX_VALUE;
+        var minShort = Short.MIN_VALUE;
+        System.out.println("Max Short: " + maxShort + ", Min Short: " + minShort);
+        System.out.println(-Math.pow(2, 15) );
+        System.out.println(Math.pow(2, 15) - 1);*/
+
     }
 
 }
