@@ -29,40 +29,28 @@ public class SuperArr {
         this.size = size;
 
         // malloc memory
-        address = getUnsafe().allocateMemory(size * BYTE);
+        address = UnsafeI.getUnsafe().allocateMemory(size * BYTE);
     }
 
     public void set(long i, byte value){
-        getUnsafe().putByte(address + i * BYTE, value);
+        UnsafeI.getUnsafe().putByte(address + i * BYTE, value);
     }
 
     public int get(long i){
-        return getUnsafe().getByte(address + i * BYTE);
+        return UnsafeI.getUnsafe().getByte(address + i * BYTE);
     }
 
     public long size(){
         return size;
     }
 
+
+    // free of no-heap memory
     public void free(){
-        getUnsafe().freeMemory(address);
+        UnsafeI.getUnsafe().freeMemory(address);
     }
 
-    private Unsafe getUnsafe(){
-        Field f = null;         // reflect
-        Unsafe unsafe = null;
 
-        try {
-            f = Unsafe.class.getDeclaredField("theUnsafe");
-            f.setAccessible(true);
-
-            // get unsafe
-            unsafe = (Unsafe) f.get(null);
-        }catch (Exception e){
-            e.printStackTrace();
-        }
-        return unsafe;
-    }
 
 
     public static void main(String[] args) {
