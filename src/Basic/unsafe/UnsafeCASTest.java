@@ -39,8 +39,6 @@ public class UnsafeCASTest {
         // putIntVolatile, safety change field value, it can be seen for other thread
         unsafe.putIntVolatile(player, 12, 50);
         System.out.println("after putIntVolatile change score value: " + player.getScore());
-
-
     }
 }
 
