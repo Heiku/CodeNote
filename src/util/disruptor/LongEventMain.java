@@ -17,13 +17,13 @@ public class LongEventMain {
     public static void main(String[] args) throws Exception {
         BlockingDeque<Runnable> queue = new LinkedBlockingDeque<>();
 
-        ThreadFactory comsumeThreadFactory = new ThreadFactoryBuilder()
+        ThreadFactory consumeThreadFactory = new ThreadFactoryBuilder()
                 .setNameFormat("consumer-%d")
                 .setDaemon(true)
                 .build();
 
-        ThreadPoolExecutor comsumeExecutor = new ThreadPoolExecutor(10, 10, 1,
-                TimeUnit.MILLISECONDS, queue, comsumeThreadFactory);
+        ThreadPoolExecutor consumeExecutor = new ThreadPoolExecutor(10, 10, 1,
+                TimeUnit.MILLISECONDS, queue, consumeThreadFactory);
 
         ThreadFactory productThreadFactoey = new ThreadFactoryBuilder()
                 .setNameFormat("producer-%d")
@@ -43,20 +43,20 @@ public class LongEventMain {
 
         for (int i = 0; i < 1; i++){
             // construct the Disruptor
-            Disruptor<LongEvent> disruptor = new Disruptor<LongEvent>(eventFactory, bufferSize, comsumeExecutor, ProducerType.SINGLE,
+            Disruptor<LongEvent> disruptor = new Disruptor<>(eventFactory, bufferSize, consumeExecutor, ProducerType.SINGLE,
                     new YieldingWaitStrategy());
 
             // connect the handler
             disruptor.handleEventsWith(new LongEventHandler());
 
-            // start
+            // sta rt
             disruptor.start();
 
             // Get the ring buffer from the Disruptor to be used for publishing
             RingBuffer<LongEvent> ringBuffer = disruptor.getRingBuffer();
 
             LongEventProducer producer = new LongEventProducer(ringBuffer);
-            for (int j = 0; j < 1000000; j++){
+            for (int j = 0; j < 100; j++){
                 producerExecutor.execute(new Work(producer, j));
             }
         }

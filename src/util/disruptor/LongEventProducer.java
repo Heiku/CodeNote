@@ -15,10 +15,12 @@ public class LongEventProducer {
     }
 
     public void onData(long v){
-        ringBuffer.getCursor();
+        long cursor = ringBuffer.getCursor();
+        System.out.println("current cursor: " + cursor);
 
         // Grab the next sequence
         long sequence = ringBuffer.next();
+        System.out.println("put data sequence: " + sequence);
 
         try {
             LongEvent event = ringBuffer.get(sequence);

@@ -30,7 +30,7 @@ tips: (Bootstrap ClassLoader, Extension ClassLoader, Application ClassLoader)
 
 通过判断 对象类的 classLoader 不是在 Java堆中，就认定该 classLoader 是属于Bootstrap ClassLoader，UnSafe 不开放给用户，在调用时
 只能通过 getUnsafe() 获取对象的实例，同时会判断是否使用 BootStrap ClassLoader 加载 Unsafe.class,(AtomicInteger 在 rt.jar 中，
-属于 Bootstrap，所以可以直接使用 Unsafe.getUnsafe()，如果是用户的话，只能通过反射构造[SuperArr](/Basic/unsafe/UnsafeI.java))
+属于 Bootstrap，所以可以直接使用 Unsafe.getUnsafe()，如果是用户的话，只能通过反射构造[SuperArr](/src/Basic/unsafe/UnsafeI.java))
 
 ```
 public static boolean isSystemDomainLoader(ClassLoader var0) {
