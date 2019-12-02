@@ -56,6 +56,13 @@
             <version>3.25.0-GA</version>
         </dependency>
 
+        <dependency>
+            <groupId>org.ow2.asm</groupId>
+            <artifactId>asm</artifactId>
+            <version>5.0.4</version>
+        </dependency>
+
+
         <!-- spring core -->
         <dependency>
             <groupId>org.springframework</groupId>
