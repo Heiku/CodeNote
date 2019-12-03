@@ -7,4 +7,5 @@ Note Java Knowledge Every Day
 [reference](/src/Basic/reference/Reference.md)  
 [annotation](/src/Basic/annonation/anno.md)
 
+[cache](src/cache/cache.md)  
 [mysql](/src/mysql/mysql.md)
