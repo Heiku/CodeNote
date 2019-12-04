@@ -8,4 +8,6 @@ Note Java Knowledge Every Day
 [annotation](/src/Basic/annonation/anno.md)
 
 [cache](src/cache/cache.md)  
-[mysql](/src/mysql/mysql.md)
+[mysql](/src/mysql/mysql.md)  
+
+[uuid](/src/uuid/uuid.md)
