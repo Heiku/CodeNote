@@ -31,6 +31,21 @@ yield 是让当前的线程主动让出时间片，并让操作系统调度其�
 当前线程会被放入到就绪队列 而不是 阻塞队列，如果没有找到其他就绪状态的线程，则当前的线程继续运行。
 可替代 `Thread.sleep(0)`.
 
+#### sleep wait
+
+1. sleep 属于 Thread，而每个对象 Object 都可调用 wait
+2. sleep 不会释放锁，而 wait 会释放对象锁，进入对象的等待锁定区
+
+
+#### wait notify notifyAll
+
+1. wait(), notify(), notifyAll() 都需要先获取对象锁，调用 wait() 会释放锁
+2. wait()调用后，线程的状态由 `RUNNING` 变成 `WAITING`，并将当前线程放置到对象的等待队列中
+3. notify() / notifyAll() 方法调用后，等待的线程并不会立即从 wait() 中返回，需要等该线程释放锁之后，才有机会获得锁
+之后从 wait() 返回
+4. notify() 方法将等待队列中的等待线程从等待队列中移至同步队列中，被移动的线程状态从 `WAITING` 变成 `BLOCKED`
+5. 从 wait() 方法返回的前提是，改线程获得了调用对象的锁
+
 ### 同步 & 异步 & 阻塞 & 非阻塞
 
 同步异步关注的是结果消息的通信机制：
@@ -60,5 +75,6 @@ yield 是让当前的线程主动让出时间片，并让操作系统调度其�
 
 ### 引用
 
-[Thread.sleep and Thread.yield](https://www.jianshu.com/p/b65a7eba937d)
+[Thread.sleep and Thread.yield](https://www.jianshu.com/p/b65a7eba937d)  
+[深入浅出synchronized](https://www.jianshu.com/p/19f861ab749e)
  

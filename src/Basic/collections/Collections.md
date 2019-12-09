@@ -145,6 +145,6 @@ static class Entry<K,V> extends HashMap.Node<K,V> {
 ### 引用
 
 [HashMap? ConcurrentHashMap?](https://crossoverjie.top/2018/07/23/java-senior/ConcurrentHashMap/)  
-[深入浅出ConcurrentHashMap1.8](https://www.jianshu.com/p/c0642afe03e0)
-[深入分析ConcurrentHashMap1.8的扩容实现](https://www.jianshu.com/p/f6730d5784ad)
-[谈谈ConcurrentHashMap1.7和1.8的不同实现](https://www.jianshu.com/p/e694f1e868ec)
+[深入浅出ConcurrentHashMap1.8](https://www.jianshu.com/p/c0642afe03e0)  
+[深入分析ConcurrentHashMap1.8的扩容实现](https://www.jianshu.com/p/f6730d5784ad)  
+[谈谈ConcurrentHashMap1.7和1.8的不同实现](https://www.jianshu.com/p/e694f1e868ec)  
