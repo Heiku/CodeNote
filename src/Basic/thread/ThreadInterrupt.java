@@ -1,26 +1,44 @@
 package Basic.thread;
 
+import org.junit.jupiter.api.Test;
+
 /**
  * @Author: Heiku
- * @Date: 2019/12/10
+ * @Date: 2019/12/11
  */
 public class ThreadInterrupt {
-    final static Object object = new Object();
 
-    public static void main(String[] args) throws Exception{
-        Thread thread = new Thread(() -> {
-            synchronized (object){
-                while (true){
-                    System.out.println("go ");
-                }
+    // thread.interrupt() didn't work , always keep print
+    public void directInterrupt() throws Exception{
+        Thread t = new Thread(() -> {
+            for (;;){
+                System.out.println("keep print");
             }
         });
-        thread.setName("thread-A");
-        thread.start();
+        t.start();
+
+        // thread.interrupt() just set a sign in thread, didn't stop
+        t.interrupt();
+    }
 
 
-        Thread.sleep(3000);
+    public void checkSignInterrupt() throws Exception {
+        Thread r = new Thread(() -> {
+            for (;;) {
+                if (Thread.currentThread().isInterrupted()){
+                    System.out.println("had interrupt");
+                    break;
+                }
+                System.out.println("keep print");
+            }
+        });
+        r.start();
+        Thread.sleep(1000);
+        r.interrupt();
+    }
 
-        thread.interrupt();
+    public static void main(String[] args) throws Exception {
+        //new ThreadInterrupt().directInterrupt();
+        new ThreadInterrupt().checkSignInterrupt();
     }
 }

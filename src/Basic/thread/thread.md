@@ -57,10 +57,9 @@ yield 是让当前的线程主动让出时间片，并让操作系统调度其�
 4. notify() 方法将等待队列中的等待线程从等待队列中移至同步队列中，被移动的线程状态从 `WAITING` 变成 `BLOCKED`
 5. 从 wait() 方法返回的前提是，改线程获得了调用对象的锁
 
-
 #### 线程中断
 
-线程中断有两种状态：运行时中断、阻塞时中断 [ThreadInterrupt](/src/Basic/thread/ThreadInterrupt.java)
+线程中断有两种状态：运行时中断、阻塞时中断 [ThreadInterrupt](/src/Basic/thread/ThreadInterruptWithLock.java)
 * 运行时中断：线程运行期间，中断线程，对线程毫无影响，只能通过标志位来判断
 * 阻塞时中断：一种是等待锁时中断，另一种时阻塞时中断，持有锁了 wait() 中断，[WaitNotify](/src/Basic/thread/waitnotify/WaitNotify.java)
 
