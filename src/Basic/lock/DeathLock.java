@@ -1,5 +1,7 @@
 package Basic.lock;
 
+import java.util.concurrent.locks.LockSupport;
+
 /**
  * 1. jps:          find out java process id
  * 2. jstack id:    explore what happened
@@ -54,6 +56,7 @@ public class DeathLock {
 
             resource1();
         }
+        
     }
 
 

@@ -270,6 +270,108 @@ private void unparkSuccessor(Node node) {
 ```
 
 
+### ReentrantLock
+
+```
+public class ReentrantLock implements Lock{
+    private final Sync sync;
+
+    abstract static class Sync extends AbstractQueuedSynchronizer {
+        
+        // try acquire
+        final boolean nonfairTryAcquire(int acquires) {
+            final Thread current = Thread.currentThread();
+            int c = getState();
+            if (c == 0) {
+                if (compareAndSetState(0, acquires)) {
+
+                    // set current be the exclusiveOwnerThread
+                    setExclusiveOwnerThread(current);
+                    return true;
+                }
+            }
+
+            // reentrant lock, state means the reentry times
+            else if (current == getExclusiveOwnerThread()) {
+                int nextc = c + acquires;
+                if (nextc < 0) // overflow
+                    throw new Error("Maximum lock count exceeded");
+                setState(nextc);
+                return true;
+            }
+            return false;
+        }
+
+        // try release
+        protected final boolean tryRelease(int releases) {
+            int c = getState() - releases;
+            if (Thread.currentThread() != getExclusiveOwnerThread())
+                throw new IllegalMonitorStateException();
+            boolean free = false;
+            if (c == 0) {
+                free = true;
+                setExclusiveOwnerThread(null);
+            }
+            setState(c);
+            return free;
+        }
+    }
+}
+```
+
+#### noFairLock
+
+1. 线程A 和线程B 同时执行 cas 指令，假设 A 执行成功，线程B 失败，则表明线程A 获得了锁，并把同步器中的 exclusiveOwnerThread
+设置为线程A
+2. 竞争失败的线程B，在 `nofairTryAcquire()` 中会再次尝试获取锁，如果失败将入队（AQS 的基本流程）
+
+```
+// default nofair acquire lock
+static final class NonfairSync extends Sync {
+    final void lock() {
+        if (compareAndSetState(0, 1))
+            setExclusiveOwnerThread(Thread.currentThread());
+        else
+            acquire(1);
+    }
+    
+    protected final boolean tryAcquire(int acquires) {
+        return nonfairTryAcquire(acquires);
+    }
+}
+```
+
+![](/src/img/nofairlock.webp)
+
+
+#### fairLock
+
+在公平锁中，与非公平锁不同的一点是在 `tryAcquire()` 的时候会调用 `hasQueuedPredcessors()`，目的是查找比当前线程更早的线程，
+这样就保证了等待时间最长的会被最先唤醒获得锁。
+
+```
+static final class FairSync extends Sync {
+     protected final boolean tryAcquire(int acquires) {
+            ...
+            // hasQueuedPredecessors()
+            if (!hasQueuedPredecessors() &&
+                compareAndSetState(0, acquires)) {
+                setExclusiveOwnerThread(current);
+                return true;
+            }
+            ...
+     }
+}
+
+public final boolean hasQueuedPredecessors() {
+    Node t = tail; // Read fields in reverse initialization order
+        Node h = head;
+        Node s;
+        return h != t &&
+            ((s = h.next) == null || s.thread != Thread.currentThread());
+}
+```
+
 ### 引用
 
 [深入浅出synchronized](https://www.jianshu.com/p/19f861ab749e)  
