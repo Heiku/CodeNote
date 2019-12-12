@@ -12,7 +12,7 @@ monitor 是线程私有的数据结构，每一个线程都有一个可用的 mo
 内部结构如下：(以线程的角度试想 synchronized)
 
 * Owner: 初始化时为 NULL 表示当前没有任何线程拥有该 monitor，当线程成功拥有该锁后，保存线程唯一标识，当锁释放时又设置为NULL
-* EntryQ: 关联一个系统的h互斥锁（semaphore），阻塞所有试图锁住 monitor 失败的线程
+* EntryQ: 关联一个系统的互斥锁（semaphore），阻塞所有试图锁住 monitor 失败的线程
 * RcThis：标识 blocked 或 waiting 在该 monitor 上的所有线程个数
 * Nest: 用来实现重入锁的计数
 * HashCode: 保存从对象头拷贝过来的 HashCode 值（可能包含 GC age）
@@ -99,6 +99,179 @@ synchronized static void method2(){};
 
 当锁处于这个状态下，其他线程试图获取锁都会被阻塞住，当持有锁的线程释放锁之后回唤醒这个线程
 
+
+### AbstractQueuedSynchronizer
+
+同步队列中的节点状态有：
+
+1. CANCELLED（1）: 取消状态, 表明前置节点已经等待超时或已经被中断，需要从等待列表中删除
+2. SIGNAL（-1）: 等待触发状态，表明当前节点需要阻塞
+3. CONDITION（-2）: 等待条件状态，表明当前节点在等待 condition， 即在 condition 队列中
+4. PROPAGATE（-3）: 状态需要向后传播，表示 releaseShared 需要被传播给后续节点，仅在共享锁模式下
+
+#### 线程获取锁的过程：
+
+1. 线程A 执行 cas 执行成功，state值被修改并且返回true，线程A继续执行
+2. 线程A 执行 cas 失败，说明线程B 在执行cas 且成功，这种情况下线程A继续执行步骤3
+3. 生成新的节点 node，并通过 cas 插入到等待队列的队尾（同一时刻可能会有多个 node 插入到等待队列中），如果 tail 为空，
+则将 head 节点指向一个空节点（代表线程B），实现如下：
+
+```
+// add new node to wait queue
+private Node addWaiter(Node mode) {
+    Node node = new Node(Thread.currentThread(), mode);
+
+    // Try the fast path of enq; backup to full enq on failure
+    Node pred = tail;
+    if (pred != null) {
+        node.prev = pred;
+
+        // try to cas enqueue once, if succee, return directly
+        if (compareAndSetTail(pred, node)) {
+            pred.next = node;
+            return node;
+        }
+    }
+    // if try to  cas enqueue failed, loop cas enqueue
+    enq(node);
+    return node;
+}
+
+// loop enqueue
+private Node enq(final Node node) {
+    for (;;) {
+        Node t = tail;
+        if (t == null) { // Must initialize
+            if (compareAndSetHead(new Node()))
+                tail = head;
+        } else {
+            node.prev = t;
+            if (compareAndSetTail(t, node)) {
+                t.next = node;
+                return t;
+            }
+        }
+    }
+}
+```
+
+4. node 插入到队尾后，该线程并不会立马挂起，会进行自旋操作。因为在 node 插入过程，线程B (之前没有阻塞的线程) 可能已经
+执行完成，所以要判断该 node 的前一个节点 pred 是否为 head 节点（代表线程B），如果 pred == head，表明当前节点是队列中
+第一个 “有效的” 节点，因此将再次尝试 `tryAcquire()` 获取锁。
+    1. 如果成功获取到锁，表明线程B 已经完成执行，线程A 不需要挂起。
+    2. 如果获取失败，表明线程B 还未完成，至少还未修改 state值，进行步骤5
+
+```
+// try acquire lock before park
+final boolean acquireQueued(final Node node, int arg) {
+    boolean failed = true;
+    try {
+        boolean interrupted = false;
+        for (;;) {
+            final Node p = node.predecessor();
+
+            // if pred is head and hold lock success, then return
+            if (p == head && tryAcquire(arg)) {
+                setHead(node);
+                p.next = null; // help GC
+                failed = false;
+                return interrupted;
+            }
+
+            // check pred node state and try to interruot thread 
+            if (shouldParkAfterFailedAcquire(p, node) &&
+                parkAndCheckInterrupt())
+                interrupted = true;
+        }
+    } finally {
+        if (failed)
+            cancelAcquire(node);
+    }
+}
+```
+
+5. 因为只有当前一个节点 pred 的线程状态为 SIGNAL 时，当前节点的线程才能被挂起。
+    1. 如果 pred 的 waitStatus == 0，则通过 cas 修改 waitStatus 为 Node.SIGNAL。
+    2. 如果 pred 的 waitStatus > 0，表明 pred 的线程状态为 CANCELLED，需从列表中删除
+    3. 如果 pred 的 waitStatus 为 Node.SIGNAL，则通过 `LockSupport.park()` 将线程挂起，并等待被唤醒，被唤醒后进入步骤6
+    
+```
+private static boolean shouldParkAfterFailedAcquire(Node pred, Node node) {
+    int ws = pred.waitStatus;
+    if (ws == Node.SIGNAL)
+        /*
+         * This node has already set status asking a release
+         * to signal it, so it can safely park.
+         */
+        return true;
+    if (ws > 0) {
+        /*
+         * Predecessor was cancelled. Skip over predecessors and
+         * indicate retry.
+         */
+        do {
+            node.prev = pred = pred.prev;
+        } while (pred.waitStatus > 0);
+        pred.next = node;
+    } else {
+        /*
+         * waitStatus must be 0 or PROPAGATE.  Indicate that we
+         * need a signal, but don't park yet.  Caller will need to
+         * retry to make sure it cannot acquire before parking.
+         */
+        compareAndSetWaitStatus(pred, ws, Node.SIGNAL);
+    }
+    return false;
+}
+```
+
+6. 线程每次被唤醒时，都要进行中断检测，如果发现当前线程被中断，那么抛出 InterruptedException 并退出循环。从 for 循环中
+可以看出，并不是被唤醒的线程一定能获得锁，必须调用 `tryAcquire()` 重新竞争，因为锁是非公平的，可能被新加入的线程获得，
+从而导致刚被唤醒的线程再次被阻塞，这个细节充分提现了 __“非公平”__。
+
+```
+if (shouldParkAfterFailedAcquire(p, node) &&
+      parkAndCheckInterrupt())
+        throw new InterruptedException();
+```
+
+#### 线程释放锁的过程
+
+1. 如果头节点 head 的 waitStatus 为-1，则通过 cas 重置为0，清除头节点的状态
+2. 从队列尾部向前找到 waitStatus < 0 可唤醒的节点 s，通过 `LockSupport.unpark()` 唤醒线程
+
+```
+private void unparkSuccessor(Node node) {
+    /*
+     * If status is negative (i.e., possibly needing signal) try
+     * to clear in anticipation of signalling.  It is OK if this
+     * fails or if status is changed by waiting thread.
+     */
+    int ws = node.waitStatus;
+    if (ws < 0)
+        compareAndSetWaitStatus(node, ws, 0);
+
+    /*
+     * Thread to unpark is held in successor, which is normally
+     * just the next node.  But if cancelled or apparently null,
+     * traverse backwards from tail to find the actual
+     * non-cancelled successor.
+     */
+    Node s = node.next;
+    if (s == null || s.waitStatus > 0) {
+        s = null;
+        for (Node t = tail; t != null && t != node; t = t.prev)
+            if (t.waitStatus <= 0)
+                s = t;
+    }
+    if (s != null)
+        LockSupport.unpark(s.thread);
+}
+```
+
+
 ### 引用
 
 [深入浅出synchronized](https://www.jianshu.com/p/19f861ab749e)  
+[深入浅出java同步器AQS](https://www.jianshu.com/p/d8eeb31bee5c)  
+
