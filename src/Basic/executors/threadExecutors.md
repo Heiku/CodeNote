@@ -132,10 +132,12 @@ else if (!addWorker(command, false))
 
 #### addWorker()
 
-addWorker() 的上半部分主要是通过 for(;;) 循环判断线程池的 state 和 coreSize
+addWorker() 的上半部分主要是通过 for(;;) 循环判断线程池的 state 和 coreSize  
+下半部分主要是将构建 Worker 实例，并加入到 HashSet 中，同时启动 Worker 中的线程。
 
 ```
 private boolean addWorker(Runnable firstTask, boolean core) {
+    ...
     boolean workerStarted = false;
     boolean workerAdded = false;
     Worker w = null;
@@ -164,6 +166,8 @@ private boolean addWorker(Runnable firstTask, boolean core) {
             } finally {
                 mainLock.unlock();
             }
+
+            // start thread, thread start to do firstTask or getTask()
             if (workerAdded) {
                 t.start();
                 workerStarted = true;
@@ -174,9 +178,135 @@ private boolean addWorker(Runnable firstTask, boolean core) {
             addWorkerFailed(w);
     }
     return workerStarted;
+}
+```
+
+#### Worker
+
+Worker 作为工作队列中的消费者，设计如下：
+
+1. 继承 AbstractQueuedSynchronizer，可以方便的实现工作线程的中断操作
+2. 实现 Runnable 接口，可以将自身作为一个任务在工作队列中执行
+3. 当前提交的任务 firstTask 可作为参数传入 Worker 的构造方法
+
+从 Worker 的构造方法实现可以发现：线程工厂在创建线程 thread 时，将 Worker 实例本身 this 作为参数传入，当执行 start()
+启动线程 thread 时，本质上时执行了 worker 的 `runWorker()`。
+```
+private final class Worker
+    extends AbstractQueuedSynchronizer
+    implements Runnable{
+
+    Worker(Runnable firstTask) {
+        setState(-1); // inhibit interrupts until runWorker
+        this.firstTask = firstTask;
+        this.thread = getThreadFactory().newThread(this);
+    }
+}
+```
+ 
+#### runWorker
+
+runWorker() 具体的任务执行过程：
+
+1. 线程启动后，通过 unlock() 释放锁，设置 AQS 的state 为0，表示运行中断
+2. 获取第一个任务 firstTask，执行任务中的 run()，在执行任务之前，会进行加锁操作，任务执行完会释放锁
+3. 在任务执行的前后，可以根据业务场景自定义 `beforeExecute()` 和 `afterExecutor()`
+4. firstTask 执行完成后，通过 `getTask()` 从阻塞队列中获取等待的任务，如果队列中没有任务，`getTask()` 会被阻塞并挂起，
+不会占用 cpu 资源 
+
+```
+final void runWorker(Worker w) {
+        Thread wt = Thread.currentThread();
+        Runnable task = w.firstTask;
+        w.firstTask = null;
+        w.unlock(); // allow interrupts
+        boolean completedAbruptly = true;
+        try {
+            while (task != null || (task = getTask()) != null) {
+                w.lock();
+                // If pool is stopping, ensure thread is interrupted;
+                // if not, ensure thread is not interrupted.  This
+                // requires a recheck in second case to deal with
+                // shutdownNow race while clearing interrupt
+                if ((runStateAtLeast(ctl.get(), STOP) ||
+                     (Thread.interrupted() &&
+                      runStateAtLeast(ctl.get(), STOP))) &&
+                    !wt.isInterrupted())
+                    wt.interrupt();
+                try {
+                    beforeExecute(wt, task);
+                    Throwable thrown = null;
+                    try {
+                        task.run();
+                    } catch (RuntimeException x) {
+                        thrown = x; throw x;
+                    } catch (Error x) {
+                        thrown = x; throw x;
+                    } catch (Throwable x) {
+                        thrown = x; throw new Error(x);
+                    } finally {
+                        afterExecute(task, thrown);
+                    }
+                } finally {
+                    task = null;
+                    w.completedTasks++;
+                    w.unlock();
+                }
+            }
+            completedAbruptly = false;
+        } finally {
+            processWorkerExit(w, completedAbruptly);
+        }
     }
 ```
 
+#### getTask()
+
+整个 getTask() 在自旋下完成（不要不断访问队列取任务）:
+
+1. workQueue.take(): 如果阻塞队列为空，当前线程会被挂起等待；当队列中有任务加入时，线程被唤醒，take() 方法直接返回任务
+2. workQueue.pool(): 如果在 keepAliveTime 时间内，阻塞队列还是没有任务，则返回null
+
+
+```
+private Runnable getTask() {
+    boolean timedOut = false; // Did the last poll() time out?
+
+    for (;;) {
+        int c = ctl.get();
+        int rs = runStateOf(c);
+
+        // Check if queue empty only if necessary.
+        if (rs >= SHUTDOWN && (rs >= STOP || workQueue.isEmpty())) {
+            decrementWorkerCount();
+            return null;
+        }
+
+        int wc = workerCountOf(c);
+
+        // Are workers subject to culling?
+        boolean timed = allowCoreThreadTimeOut || wc > corePoolSize;
+
+        if ((wc > maximumPoolSize || (timed && timedOut))
+            && (wc > 1 || workQueue.isEmpty())) {
+            if (compareAndDecrementWorkerCount(c))
+                return null;
+            continue;
+        }
+
+        try {
+            Runnable r = timed ?
+                workQueue.poll(keepAliveTime, TimeUnit.NANOSECONDS) :
+                workQueue.take();
+            if (r != null)
+                return r;
+            timedOut = true;
+        } catch (InterruptedException retry) {
+            timedOut = false;
+        }
+    }
+}
+```
  
 ### 引用
 [深入分析java线程池的实现原理](https://www.jianshu.com/p/87bff5cc8d8c)  
