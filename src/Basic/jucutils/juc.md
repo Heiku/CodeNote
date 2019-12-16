@@ -225,10 +225,41 @@ private int dowait(boolean timed, long nanos)
 ### Semaphore
 
 Semaphore 也叫信号量，用来控制同时访问特定线程的数量，通过协调各个线程，以保证合理的使用资源。
-内部基于 AQS，可用于做流量控制
+内部基于 AQS，(和 CountDownLatch 一样，都是重写了 `tryAcquireShared()` & `tryReleaseShared()` )可用于做流量控制
 
+内部维护了一组虚拟许可证，许可的数量可以通过构造函数的参数指定。
 
+* 在访问特定资源之前，必须使用 `acquire()` 获得方法许可，如果许可的数量为0，该线程将一直阻塞，直到有可用许可
+1. acquires 表示请求的线程数，默认为1，remaining 表示剩余的许可数，如果 remaining < 0，表示目前没有剩余的许可数
+2. 当前线程进入 AQS 中的 `doAcquireSharedInterruptibly()` 等待可用许可并挂起，直到被唤醒。
 
+```
+final int nonfairTryAcquireShared(int acquires) {
+    for (;;) {
+        int available = getState();
+        int remaining = available - acquires;
+        if (remaining < 0 ||
+            compareAndSetState(available, remaining))
+            return remaining;
+    }
+}
+```
 
+* 访问资源后，使用 `release()` 释放许可
+1. 通过 `unsafe.compareAndSwapInt()` 修改 state 的值，确保同一时刻内只有一个线程可以释放成功
+2. 许可释放成功后，当前线程进入到 `AQS.doReleaseShared()`，唤醒队列中的等待许可队列 
+
+```
+protected final boolean tryReleaseShared(int releases) {
+    for (;;) {
+        int current = getState();
+        int next = current + releases;
+        if (next < current) // overflow
+            throw new Error("Maximum permit count exceeded");
+        if (compareAndSetState(current, next))
+            return true;
+    }
+}
+```
 ### 引用
 [深入浅出java CountDownLatch](https://www.jianshu.com/p/1716ce690637)
