@@ -372,8 +372,188 @@ public final boolean hasQueuedPredecessors() {
 }
 ```
 
+
+### 共享锁
+
+共享锁与独占锁的区别在于，独占锁是独占的，排他的，因此在独占锁中有 exclusiveOwnerThread 属性，用于记录当前持有锁的线程。
+当独占锁被某个线程占有时，其他线程只能等待它被释放后，才能取争夺锁，并且同一时刻只能有一个线程争夺成功。(联想 tryAcquire()
+失败后，acquireQueued())。
+
+对于共享锁而言，锁是共享的，所以能被多个线程同时持有。因此一个线程如果成功得获取了锁，那么其他等待在这个共享锁上的线程也可以
+继续获得锁。
+
+#### 实现
+
+在独占锁模式中，我们只有在获取了独占锁的节点释放锁时，才会唤醒后继节点。因为独占锁只能被一个线程持有，如果还没被释放，
+那么没必要唤醒后续接待你。
+
+然而，在共享模式下，当一个节点获取到了共享锁，我们在获取成功后可以唤醒后续节点，而不需要等待该节点释放锁的时候，
+因为共享锁可以被多个线程同时拥有，一个锁取到了，则后续的节点都可以直接来获取。因此，在共享锁模式下，在获取锁和释放锁
+结束后，都会唤醒后继节点。
+
+* 独占锁的实现
+
+和上面介绍的一样，获取锁的过程中，先 `tryAcquire(arg)` （具体实现由场景决定）判断是否能获取锁，如果失败将执行 `acquireQueued()`
+将线程加入到等待队列中。
+
+```
+public final void acquire(int arg) {
+    if (!tryAcquire(arg) &&
+        acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
+        selfInterrupt();
+}
+```
+
+* 共享锁实现
+
+和独占锁一样，先 `tryAcquireShared(arg)` (具体实现由场景决定) 尝试获取锁，如果获取失败，则调用 `doAcquireShared()` 
+进行入队操作，同时唤醒后续线程。
+
+```
+public final void acquireShared(int arg) {
+    if (tryAcquireShared(arg) < 0)
+        doAcquireShared(arg);
+}
+```
+
+和独占锁的过程差不多，显示调用 `addWaiter(Node.SHARED)` 将线程加入等待队列，然后自旋一段时间判断能否获得锁，
+如果获得成功的话，通过 `setHeadAndPropagate()` 唤醒后续节点去获取这个共享锁资源。
+
+```
+private void doAcquireShared(int arg) {
+    final Node node = addWaiter(Node.SHARED);
+    boolean failed = true;
+    try {
+        boolean interrupted = false;
+        for (;;) {
+            final Node p = node.predecessor();
+            if (p == head) {
+                int r = tryAcquireShared(arg);
+                if (r >= 0) {
+                    setHeadAndPropagate(node, r);
+                    p.next = null; // help GC
+                    if (interrupted)
+                        selfInterrupt();
+                    failed = false;
+                    return;
+                }
+            }
+            if (shouldParkAfterFailedAcquire(p, node) &&
+                parkAndCheckInterrupt())
+                interrupted = true;
+        }
+    } finally {
+        if (failed)
+            cancelAcquire(node);
+    }
+}
+```
+
+
+#### setHeadAndPropagate()
+
+1. 将当前节点设置成新的头节点，这意味着前置节点（旧头节点）已经获得共享锁，并从队列中移除了(这点和独占锁一样)
+2. 调用 `doReleaseShared()`，它会调用 `unparkSuccssor()` 唤醒后继节点
+
+```
+private void setHeadAndPropagate(Node node, int propagate) {
+    // set new queue head
+    Node h = head; // Record old head for check below
+    setHead(node);
+
+    if (propagate > 0 || h == null || h.waitStatus < 0 ||
+        (h = head) == null || h.waitStatus < 0) {
+        Node s = node.next;
+
+        // // if new head node's next node is  null or shared, signal next node
+        if (s == null || s.isShared())
+            doReleaseShared();
+    }
+}
+```
+
+#### doReleaseShared
+
+释放锁的时候和独占锁有些不同：
+
+* 线程不同：
+
+在独占锁中，只有获取了锁的线程才能调用 release 释放锁，然后调用 `unparkSuccessor()` 唤醒后续的节点持有的线程。
+
+在共享锁中，持有共享锁的线程会同时存在多个，所以在 `acquireShared()` 和 `releaseShared()` 释放锁，目的都是为了唤醒 head
+节点的下一个节点，这点和独占锁相似，但在共享锁中，当头节点发生变化时，会回到循环中立即唤醒 head 的下一个节点。
+
+```
+private void doReleaseShared() {
+    for (;;) {
+        Node h = head;
+        if (h != null && h != tail) {
+            int ws = h.waitStatus;
+
+            // if head status == SIGNAL, it means it need to be signal, if failed, loop try again
+            if (ws == Node.SIGNAL) {
+                if (!compareAndSetWaitStatus(h, Node.SIGNAL, 0))
+                    continue;            // loop to recheck cases
+                unparkSuccessor(h);
+            }
+            
+            // if next node don't need to signal, set the head status = PROPAGATE, 
+            // make sure it can pass the status to next after that.
+            else if (ws == 0 &&
+                     !compareAndSetWaitStatus(h, 0, Node.PROPAGATE))
+                continue;                // loop on failed CAS
+        }
+        if (h == head)                   // loop if head changed
+            break;
+    }
+}
+```
+
+因为多个线程会同时执行加锁和释放操作，而只有在 `doAcquireShared()` 的时候才会更新头节点的head 信息，假如队列 A->B->C，
+当 A 释放锁后，唤醒B，这时B为节点即 B->C，在唤醒B后，B线程也会开始唤醒下一个节点C，在唤醒期间，A在执行h == head时，发现
+自己已经不是头节点了，那么回到循环中，帮助协助完成唤醒操作。
+
+通过for循环，判断头节点的状态：
+1. 如果头节点head 的状态为 SIGNAL，说明头节点可以唤醒了，那么采用cas的方式更改节点状态为0，并唤醒它
+2. 如果头节点head 的状态为0，说明不需要唤醒，那么 cas 设置状态为 PROPAGATE，确保下次状态传播
+
+
+#### 应用
+
+独占锁表示某个线程持续占有资源，我们可以很容易想到锁，对应的实现就是 ReentrantLock.sync，同时还有 ThreadPoolExecutor.worker。
+
+共享锁可用于表示控制多个线程占有资源，例如 CountDownLatch, Semaphore, ReentrantReadWriteLock
+
+
+### Condition
+
+Condition 是 ReentrantLock 拓展 wait/notify 而引用的新的阻塞唤醒机制。
+
+#### wait/notify 的不足
+
+在 synchronized 中，所有调用 wait() 的线程，都会在同一个监视器锁 wait set 中等待，但每一个等待的线程可能等待在不同的条件
+上，有时即使自己等待的条件并没有被满足，线程仍然能被其他线程调用 notify() 唤醒，因为大家都是使用同一个监视器锁，这样就会
+造成即使自己被唤醒后，抢到了监视器锁，但仍然发现条件还是不满足，还是得调用 wait() 挂起，导致了很多无意义的时间和 CPU 资源
+的浪费。  
+而有了 Condition 后，我们就可以在同一个锁上创建不同的唤醒条件，从而在一定的条件满足后，针对性的唤醒特定的线程，
+而不是直接唤醒所有线程。
+
+
+#### 实现
+
+每构建一个 Condition 对象，对应着一个 condition queue，每个 condition queue 都是互相独立的。当条件满足后，调用条件队列的
+`signal()`，会将所有等待在这个条件队列中的线程唤醒，被唤醒的线程和普通线程一样需要争夺锁，如果没有抢到，
+则同样要被加入到 sync queue 中。
+
+#### sync queue & condition queue 入队出队状态
+
+* sync queue: 入队时没有锁，在队列中争夺锁，离开队列时获取了锁
+* condition queue: 入队时获取了锁，在队列中释放了锁，离开队列时没有锁，转移到 sync queue 
+
 ### 引用
 
 [深入浅出synchronized](https://www.jianshu.com/p/19f861ab749e)  
 [深入浅出java同步器AQS](https://www.jianshu.com/p/d8eeb31bee5c)  
+[逐行分析AQS源码(4)——Condition接口实现](https://segmentfault.com/a/1190000016462281)  
+
 

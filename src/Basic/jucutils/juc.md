@@ -41,109 +41,66 @@ private static final class Sync extends AbstractQueuedSynchronizer {
 
 #### await()
 
-主线程通过执行 `await()`, 调用 `AQS.doAcquireSharedInterruptibly()`，采用的是共享锁模式，调用 `addWaiter()` 入队，再入队后
-重试获取锁，如果成功则调用 `setHeadAndPropagate()` 唤醒后继节点，如果失败则通过 `LockSupport.park()` 阻塞主线程。
-
-* 和独占锁一样，都是采用了入队后自旋的操作尝试获取锁，不同的是，一旦获取了共享锁，会调用 `setHeadAndPropagete()` 同时
-唤醒后继节点，实现共享模式
+主线程通过执行 `await()`, 接着会调用 `AQS.acquireSharedInterruptibly()`，判断线程中断，接着调用 `tryAcquireShared()`，
+这个方法会回调子类中的实现，而 `CountDownLatch.Syn` 中的实现逻辑是当 state != 0 的时候，将该线程加入到同步队列中，
+等待唤醒。如果 state == 0，说明countDownLatch 已经没有需要阻塞的线程了，不需要操作。 
 
 ```
-private void doAcquireSharedInterruptibly(int arg)
-    throws InterruptedException {
+public void await() throws InterruptedException {
+    sync.acquireSharedInterruptibly(1);
+}
 
-    // enqueue node in shared mode
-    final Node node = addWaiter(Node.SHARED);
-    boolean failed = true;
-    try {
-        for (;;) {
-            final Node p = node.predecessor();
-            if (p == head) {
+public final void acquireSharedInterruptibly(int arg)
+        throws InterruptedException {
+    if (Thread.interrupted())
+        throw new InterruptedException();
+    if (tryAcquireShared(arg) < 0)
+        doAcquireSharedInterruptibly(arg);
+}
 
-                // before park, try to race shared lock, 
-                int r = tryAcquireShared(arg);
-
-                // if succcess, signal next node
-                if (r >= 0) {
-                    setHeadAndPropagate(node, r);
-                    p.next = null; // help GC
-                    failed = false;
-                    return;
-                }
-            }
-
-            // if failed, LockSupport.park block thread
-            if (shouldParkAfterFailedAcquire(p, node) &&
-                parkAndCheckInterrupt())
-                throw new InterruptedException();
-        }
-    } finally {
-        if (failed)
-            cancelAcquire(node);
-    }
+protected int tryAcquireShared(int acquires) {
+    return (getState() == 0) ? 1 : -1;
 }
 ```
 
-#### setHeadAndPropagate()
+#### countDown()
 
-1. 将当前节点设置成新的头节点，这意味着前置节点（旧头节点）已经获得共享锁，并从队列中移除了(这点和独占锁一样)
-2. 调用 `doReleaseShared()`，它会调用 `unparkSuccssor()` 唤醒后继节点
+每当其他线程执行 countDown() 时，都会将 state - 1，在 `tryReleaseShared()` 中，判断是否唤醒线程的根据是
+判断当前的 state == 0，如果state == 0，说明已经没有线程需要等到了，阻塞的线程将在同步队列中按照共享锁的
+方式被唤醒。
 
 ```
-private void setHeadAndPropagate(Node node, int propagate) {
-    // set new queue head
-    Node h = head; // Record old head for check below
-    setHead(node);
-
-    if (propagate > 0 || h == null || h.waitStatus < 0 ||
-        (h = head) == null || h.waitStatus < 0) {
-        Node s = node.next;
-
-        // // if new head node's next node is  null or shared, signal next node
-        if (s == null || s.isShared())
-            doReleaseShared();
-    }
+public void countDown() {
+    sync.releaseShared(1);
 }
-```
 
-### doReleaseShared
+public final boolean releaseShared(int arg) {
+    if (tryReleaseShared(arg)) {
+        doReleaseShared();
+        return true;
+    }
+    return false;
+}
 
-通过for循环，判断头节点的状态：
-
-1. 如果头节点head 的状态为 SIGNAL，说明头节点可以唤醒了，那么采用cas的方式更改节点状态为0，并唤醒它
-2. 如果头节点head 的状态为0，说明不需要唤醒，那么 cas 设置状态为 PROPAGATE，确保下次状态传播
-
-```
-private void doReleaseShared() {
+protected boolean tryReleaseShared(int releases) {
+    // Decrement count; signal when transition to zero
     for (;;) {
-        Node h = head;
-        if (h != null && h != tail) {
-            int ws = h.waitStatus;
-
-            // if head status == SIGNAL, it means it need to be signal, if failed, loop try again
-            if (ws == Node.SIGNAL) {
-                if (!compareAndSetWaitStatus(h, Node.SIGNAL, 0))
-                    continue;            // loop to recheck cases
-                unparkSuccessor(h);
-            }
-            
-            // if next node don't need to signal, set the head status = PROPAGATE, 
-            // make sure it can pass the status to next after that.
-            else if (ws == 0 &&
-                     !compareAndSetWaitStatus(h, 0, Node.PROPAGATE))
-                continue;                // loop on failed CAS
-        }
-        if (h == head)                   // loop if head changed
-            break;
+        int c = getState();
+        if (c == 0)
+            return false;
+        int nextc = c-1;
+        if (compareAndSetState(c, nextc))
+            return nextc == 0;
     }
 }
 ```
-
-
 
 ### CyclicBarrier
 
 CyclicBarrier 也叫同步屏障，可以让一组线程达到一个屏障时被阻塞，知道最后一个线程达到屏障，所有被阻塞的线程才能继续执行。  
 [CyclicBarrier](/src/Basic/jucutils/cyclicbarrier/Racce.java)
+
+
 
 ### await()
 
@@ -225,9 +182,62 @@ private int dowait(boolean timed, long nanos)
 ### Semaphore
 
 Semaphore 也叫信号量，用来控制同时访问特定线程的数量，通过协调各个线程，以保证合理的使用资源。
-内部基于 AQS，(和 CountDownLatch 一样，都是重写了 `tryAcquireShared()` & `tryReleaseShared()` )可用于做流量控制
+内部基于 AQS，(和 CountDownLatch 一样，都是重写了 `tryAcquireShared()` & `tryReleaseShared()`)。
 
 内部维护了一组虚拟许可证，许可的数量可以通过构造函数的参数指定。
+
+```
+abstract static class Sync extends AbstractQueuedSynchronizer {
+
+    Sync(int permits) {
+        setState(permits);
+    }
+
+    final int getPermits() {
+        return getState();
+    }
+
+    final int nonfairTryAcquireShared(int acquires) {
+        for (;;) {
+            int available = getState();
+            int remaining = available - acquires;
+            if (remaining < 0 ||
+                compareAndSetState(available, remaining))
+                return remaining;
+        }
+    }
+
+    protected final boolean tryReleaseShared(int releases) {
+        for (;;) {
+            int current = getState();
+            int next = current + releases;
+            if (next < current) // overflow
+                throw new Error("Maximum permit count exceeded");
+            if (compareAndSetState(current, next))
+                return true;
+        }
+    }
+
+    final void reducePermits(int reductions) {
+        for (;;) {
+            int current = getState();
+            int next = current - reductions;
+            if (next > current) // underflow
+                throw new Error("Permit count underflow");
+            if (compareAndSetState(current, next))
+                return;
+        }
+    }
+
+    final int drainPermits() {
+        for (;;) {
+            int current = getState();
+            if (current == 0 || compareAndSetState(current, 0))
+                return current;
+        }
+    }
+}
+```
 
 * 在访问特定资源之前，必须使用 `acquire()` 获得方法许可，如果许可的数量为0，该线程将一直阻塞，直到有可用许可
 1. acquires 表示请求的线程数，默认为1，remaining 表示剩余的许可数，如果 remaining < 0，表示目前没有剩余的许可数
@@ -262,4 +272,6 @@ protected final boolean tryReleaseShared(int releases) {
 }
 ```
 ### 引用
-[深入浅出java CountDownLatch](https://www.jianshu.com/p/1716ce690637)
+[深入浅出java CountDownLatch](https://www.jianshu.com/p/1716ce690637)  
+[深入浅出java CyclicBarrier](https://www.jianshu.com/p/424374d71b67)  
+[深入浅出java Semaphore](https://www.jianshu.com/p/0090341c6b80)  
