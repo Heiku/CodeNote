@@ -2,6 +2,7 @@ Note Java Knowledge Every Day
 
 [base](/src/Basic/asm/base.md)  
 [jvm](/src/Basic/jvm/jvm.md)  
+[gc](/src/Basic/jvm/gc.md)  
 [atomic](/src/Basic/cpu/atomic.md)  
 [lock](/src/Basic/lock/lock.md)  
 [juc](/src/Basic/jucutils/juc.md)  
