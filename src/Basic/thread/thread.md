@@ -57,6 +57,19 @@ yield 是让当前的线程主动让出时间片，并让操作系统调度其�
 4. notify() 方法将等待队列中的等待线程从等待队列中移至同步队列中，被移动的线程状态从 `WAITING` 变成 `BLOCKED`
 5. 从 wait() 方法返回的前提是，改线程获得了调用对象的锁
 
+#### Monitor
+
+在 HotSpot 虚拟机中，monitor 采用 ObjectMonitor 实现。
+
+每个线程都有两个 ObjectMonitor 对象列表，分别为 free 和 used 列表，如果当前的 free 列表为空，线程将向全局 global list 请求请求分配
+ObjectMonitor。
+
+ObjectMonitor 对象中有两个队列: _WaitSet 和 _EntryList，用来保存 ObjectWaiter 对象列表；_owner 用来指向获得 ObjectMonitor 对象的
+线程。
+* WaitSet: 处于 wait 状态的线程，会被加入到 wait set中
+* EntryList: 处于等待锁 blocked 状态的线程，会被加入到 entry set
+
+
 #### 线程中断
 
 线程中断有两种状态：运行时中断、阻塞时中断 [ThreadInterrupt](/src/Basic/thread/ThreadInterruptWithLock.java)
@@ -71,6 +84,18 @@ yield 是让当前的线程主动让出时间片，并让操作系统调度其�
 5. LockSupport.part(): 线程中断后将不再阻塞，也不抛异常
 6. Thread.join(): join() 内部实际上是调用 wait()，自然响应异常
 7. Thread.sleep(): 方法内部是由 JVM 实现，会响应异常并抛出
+
+
+### threadLocal
+
+threadLocal 的内存泄漏问题？
+
+在 threadLocal.threadLocalMap.Entry 中，key 被保存在 WeakReference 对象中，导致了当 threadLocal 没有外部强引用时，发生
+GC 时回收，如果创建 ThreadLocal 的线程一直运行，那么这个 Entry 对象中的 value 就有可能一直的不到回收，发生内存泄漏。
+所以建议在使用完 threadLocal 后，在finally 中调用 remove()。
+
+### 引用
+[JVM源码分析之Object.wait/notify实现](https://www.jianshu.com/p/f4454164c017)  
 
 
 

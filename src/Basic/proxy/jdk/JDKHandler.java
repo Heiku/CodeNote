@@ -15,7 +15,6 @@ public class JDKHandler implements InvocationHandler {
         this.object = o;
     }
 
-
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
         System.out.println("before invoke");

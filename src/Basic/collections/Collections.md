@@ -41,6 +41,35 @@ static final int tableSizeFor(int cap) {
 扩容后的链表会倒叙，所以但线程切换时，有可能会出现上一个线程持有数组下标节点，而下一个线程已经修改扩容完了，
 所以上一个线程在持有节点的时候，不知道已经扩容完，等到其扩容时，节点间形成环，导致cpu 100%
 
+造成死循环的原因主要在下面的代码：
+```
+void transfer(Entry[] newTable, boolean rehash) {
+    int newCapacity = newTable.length;
+    for (Entry<K,V> e : table) {
+        while(null != e) {
+            Entry<K,V> next = e.next;
+            if (rehash) {
+                e.hash = null == e.key ? 0 : hash(e.key);
+            }
+            int i = indexFor(e.hash, newCapacity);
+            e.next = newTable[i];
+            newTable[i] = e;
+            e = next;
+        }
+    }
+}
+```
+1.7的扩容思路是，遍历oldTable 中的 entry, 重新计算 hash 后，定位到 newTable[i] 中，每次遍历都会取到该位置下的首节点 head，
+将 head 作为 当前节点的 next，这样就完成了新节点的插入操作。但这样的扩容会因为在倒序插入这样的特点下，形成闭环。
+
+![](/img/hashmap1.7.webp)
+
+想象一下，原来的数组 oldTable[3] a -> b -> c，  
+然后进行扩容，多个线程在争夺，假如线程A 先完成扩容（线程B 并不知情），这时在 newTable[7] c -> b -> a，倒序  
+这时切换到了B 执行，先从a 开始，正常 newTable[7] a，  
+然后开始插入 oldTable 中的 b，正常 newTable[7] b -> a，因为在线程A 中因为 b -> a，所以继续插入a，  
+那么就会到时 a.next = newTable[7] b，即 a.next = b，a -> b, b -> a，就形成了闭环。
+
 * 其次，最主要的还是日常操作中的put(),get(),size(),contain()等方法中，没有使用锁，导致多线程中数据替换丢失、
 数据访问不一致的问题
 
