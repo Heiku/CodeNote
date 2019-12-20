@@ -43,5 +43,11 @@ public int hashCode() {
 同时，31 有个很好的性能，JVM 中进行了优化，即用移位和减法代替了乘法，可以得到更好的性能 `31 * i == (i << 5） - i`，
 31 在性能和溢出上做了平衡，如果使用 63，那么就有可能会更容易溢出。
 
+
+### 异常
+
+* Checked Exception: 编译器可检测的异常（ClassNotFoundException、IOException）
+* Runtime Exception: 运行期间产生的异常（NullPointerException、IndexOutOfBoundsException）
+
 ### 引用
 [](https://www.zhihu.com/question/31203609)
