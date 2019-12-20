@@ -5,7 +5,6 @@ import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.YieldingWaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
-import com.sun.corba.se.spi.orbutil.threadpool.Work;
 
 import java.util.concurrent.*;
 
