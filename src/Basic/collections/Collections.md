@@ -44,13 +44,9 @@ static final int tableSizeFor(int cap) {
 造成死循环的原因主要在下面的代码：
 ```
 void transfer(Entry[] newTable, boolean rehash) {
-    int newCapacity = newTable.length;
     for (Entry<K,V> e : table) {
         while(null != e) {
             Entry<K,V> next = e.next;
-            if (rehash) {
-                e.hash = null == e.key ? 0 : hash(e.key);
-            }
             int i = indexFor(e.hash, newCapacity);
             e.next = newTable[i];
             newTable[i] = e;
