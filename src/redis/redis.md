@@ -195,7 +195,8 @@ contents[] 的存储类型不是固定的，通常会按照encoding 规定的类
 
 zipList 包括了 zlbytes, zltail, zllen, entry... , zlend，通过 zlbtes, zltail 可快速定位压缩列表的长度。
 zipListNode 包括了 previous_entry_length, encoding, content，通常可以通过 zltail， previous_entry_length 可定位每个节点。
-
+压缩的意义在于可以根据存储的 encoding 分配对应的存储空间，使得每个压缩列表的节点可以保存一个字节数组或者是一个整数值，这样节点的存储空间就能被
+充分利用，很好地压缩了存储空间。
 
 ### redisObject
 
@@ -224,3 +225,156 @@ Redis 对对象划分 encoding，这样就可以根据不同的使用场景来�
 缓存中
 * 随着列表对象包含的元素越来越多，使用列表k空间保存元素的优势也逐渐消失，对象就会将底层实现从压缩列表转向功能更强、也更
 适合保存大量元素的双端链表上。
+
+
+#### 字符串对象
+
+字符串对象的编码类型有： int、embstr、raw
+
+embstr 编码是专门用于保存短字符串的优化编码方式，通常用于保存字符串值长度小于等于32字节，和 raw 编码一样，都使用了 redisObject 和 
+sdshdr 结构表示字符串对象，但 raw 编码会调用两次内存分配函数来创建这两种结构，而 embstr 只会调用一次内存分配函数来分配一块连续的空间。
+同理，在释放内存空间时，也只需调用一次内存释放函数。
+
+浮点数 double 的存储是通过 embstr，计算后以 embstr 方式存储。
+
+```
+|    redisObject        |       sdshdr     |
+| type | encoding | ptr | free | len | buf |
+
+set、get、append、incrby、decrby、strlen、setrange、getrange
+```
+
+#### 列表对象
+
+列表对象的编码类型有： zipList、linkedList
+
+当列表对象可以同时满足以下两个条件时，列表对象使用 zipList 编码， 否则使用双端列表 linkedList 编码： 
+* 列表对象保存的所有字符串元素的长度都小于 64 字节
+* 列表对象保存的元素数量小于 512 个
+
+```
+redisObject (ptr -> zipList)
+redisObject (ptr -> linkedList)
+
+lpush、rpush、lpop、rpop、rindex、llen、linsert、lrlen、lset
+```
+
+#### 哈希对象
+
+哈希对象的编码类型有: zipList、hashtable
+
+zipList 编码的哈希对象使用压缩列表作为底层实现，每当有新的键值对要加入到哈希对象时，会先将保存了 key 的 zipListNode 加入到
+压缩列表的表尾，再将保存了 value 的 zipListNode 推入到压缩列表的表尾。
+* 保存了同一键值对的两个节点总是紧挨在一起，保存了键的节点在前，保存值的节点在后
+* 先添加到哈希对象中的键值对会被放在压缩列表的表头方向，而后来添加的哈希对象中的键值对会被放在压缩列表的表尾方向。
+
+
+```
+redisObject( ptr -> zipList)
+redisObject( ptr -> dict ) 
+
+| zlbytes | zltail | zllen | "name" | "Tom | "age" | 25 | ... | zlend |
+```
+
+hashtable 编码的哈希对象使用了字典作为底层实现，哈希对象中的每个键值对都使用了字典键值对来保存
+* 字典中的每个 key 都是一个字符串对象，对象中保存了键值对的键
+* 字典中的每个 value 都是一个字符串对象，对象中保存了键值对的值
+
+当哈希对象可以同时满足以下两个条件时，哈希对象使用 zipList 编码，否则使用 dict：
+* 哈希对象保存的所有键值对的键和值的字符串长度都小于 64 字节
+* 哈希对象保存的键值对数量小于 512 个
+
+```
+hset、hget、hexist、hdel、hlen、hgetall
+```
+
+#### 集合对象
+
+集合对象的编码类型有：inset、hashtable
+
+```
+redisObject (ptr -> inset)
+redisObject (ptr -> dict)
+```
+
+当集合对象可以同时满足一下两个条件时，对象使用 inset 编码，否则使用 hashtable：
+* 集合对象保存的所有元素都是整数值
+* 集合对象保存的元素数量不超过 512 个
+
+```
+sadd、scard、sismember、smembers、srandmember、spop、srem
+```
+
+#### 有序集合对象
+
+有序对象的编码类型有：zipList、skipList
+
+zipList 编码的压缩列表对象使用压缩列表作为底层实现。每个集合元素使用两个紧挨在一起的压缩列表节点来保存，第一个节点
+保存元素的成员（member），第二个元素保存元素的分值（score）。压缩列表内的元素按分值从小到大进行排序，分值较小的元素
+在表头，分值大的元素在表尾。
+
+```
+typedef struct zset{
+    sskiplist *zsl;
+    dict *dict;
+}
+
+zlbytes|zltail|zllen| "banana" | 5.0 | "cherry" | 6.0 | "apple" | 8.5 | zlend |
+```
+
+zset 结构同时使用了跳跃表和字典来保存有序集合元素，但这两种数据结构都会通过指针来共享相同元素的成员和分值，所以同时使用
+跳跃表和字典来保存集合元素不会产生任何重复成员或者分值，也不会因此而浪费额外的内存占用。
+
+那么，为什么需要同时使用跳跃表和字典来实现呢？  
+* 这是从性能方面考虑的，因为有序集合完全可以单独使用字典或者跳跃表实现，但这样单独使用的话存在这性能的降低。
+例如，如果我们只使用字典实现zset，当查找的时候，时间复杂度仅为 O(1)，但因为字典的无序保存形式，比如在 zrank、zrange
+等命令，需要进行排序 O(NlongN)。  
+如果我们只用跳跃表实现 zset，那么执行范围操作的有点因为跳跃表的特性将降低，但查找值的时候复杂度将从 O(1)->O(logN)
+
+当有序集合对象可以同时满足以下两个条件时，对象使用 zipList，否则使用 skipList：
+* 有序集合保存的元素数量小于 128 个
+* 有序集合保存的所有元素成员的长度都小于 64 字节
+
+```
+zadd、zcard(return list node num includes value & score)、zcount、zrange、zrevrange、zrank、zrerank、zrem、zsocre
+```
+
+#### 内存引用
+
+C 语言并不具备自动内存回收功能，所以 Redis 在自己对象系统中构建了一个引用计数 (reference counting) 技术实现的内存回收机制。
+程序可以跟踪对象的引用计数信息，在适当的时候自动释放对象并进行内存回收。
+
+```
+typedef struct redisObject{
+    ...
+    int refcount;       // 引用计数
+}
+
+incrRefCount、decrRefCount、resetRefCount
+```
+
+创建对象时，初始化为1，使用+1，不使用-1，当为0时，对象所占用的内存会被释放。
+
+#### 对象共享
+
+对象的引用技术属性 refCount 不仅用于内存回收机制，同时还有对象共享的作用，当相同键的对象引用相同的值对象，那么该值对象的
+引用计数值 refCount + 1，这样可以大大的减少内存的创建占用等。但受限于字符串对象（特别是多值的）在检测对象是否相同时，会
+消耗很多的 CPU，所以Redis 只会对包含整数值的字符串对象进行共享。
+
+#### 对象空转时间
+
+redisObject 除了 type、encoding、ptr、refCount 之外，还有一个属性为 lru，记录了对象最后一次被命令程序访问的时间。
+
+```
+typedef struct redisObject{
+    ...
+    unsigned lru;
+}
+
+obejct idletime key
+```
+
+如果服务器打开了 maxmemory 选项，并且服务器用于回收内存的算法为 volatile-lru 或者是 allkeys-lru，那么当服务器
+占用的内存超过了 maxmemory 设置的上限值时，空转时长较高的那部分键会优先被服务器释放，从而回收内存。
+
+
