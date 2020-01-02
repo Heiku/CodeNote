@@ -15,8 +15,11 @@ Note Java Knowledge Every Day
 
 [cache](src/cache/cache.md)  
 [mysql](/src/mysql/mysql.md)  
+
+
 [redis-struct](/src/redis/redis_struct.md)  
 [redis-store](/src/redis/redis_store.md)  
 [redis-full](/src/redis/redis_full.md)  
+[redis-extra](/src/redis/redis_extra.md)  
 
 [uuid](/src/uuid/uuid.md)
