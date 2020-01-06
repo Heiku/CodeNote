@@ -191,12 +191,17 @@ contents[] 的存储类型不是固定的，通常会按照encoding 规定的类
 ### zipList
 
 压缩列表 (zipList) 是 Redis 为了节约内存而开发，是由一系列特殊编码的连续内存组成的顺序型（sequential）数据结构。一个
-压缩列表可以包含任意多个节点（entry），每个节点可以保存一个字节数组h或者一个整数值。
+压缩列表可以包含任意多个节点（entry），每个节点可以保存一个字节数组或者一个整数值。
 
 zipList 包括了 zlbytes, zltail, zllen, entry... , zlend，通过 zlbtes, zltail 可快速定位压缩列表的长度。
 zipListNode 包括了 previous_entry_length, encoding, content，通常可以通过 zltail， previous_entry_length 可定位每个节点。
 压缩的意义在于可以根据存储的 encoding 分配对应的存储空间，使得每个压缩列表的节点可以保存一个字节数组或者是一个整数值，这样节点的存储空间就能被
 充分利用，很好地压缩了存储空间。
+
+
+为什么说 zipList 能节省内存？  
+zipList 采用了一段连续的内存空间存储数据，相比于 hashtable（dict）减少了内存占用碎片和指针内存占用，当节点较少时，zipList
+更容易被载入到 CPU 缓存中。缺点是限制于数组链表结构，查找的时间复杂度为 O(N)，数据量小时可观，但数据量大时，不如 dict。
 
 ### redisObject
 
@@ -214,7 +219,7 @@ type: REDIS_STRING, REDIS_LIST, REDIS_SET, REDIS_HASH, REDIS_ZSET， `type key` 
 
 encoding:   
 * REDIS_STRING: REDIS_ENCODING_INT（整型字符串）、REDIS_ENCODING_EMBSTR (embstr 编码的sds)、REDIS_ENCODING_RAW（sds）  
-* REDIS_LIST: REDIS_ENCODING_ZIPLIST（压缩列表）、REDIS_ENCODING_LINKEDLIST（双端列表）、REDIS_ENCODING_ZIPLIST（压缩列表）
+* REDIS_LIST: REDIS_ENCODING_ZIPLIST（压缩列表）、REDIS_ENCODING_LINKEDLIST（双端列表）
 * REDIS_HASH: REDIS_ENCODING_HT（字典）
 * REDIS_SET: REDIS_ENCODING_INTSET（整数集合）、REDIS_ENCODING_HT（字典）
 * REDIS_ZSET: REDIS_ENCODING_ZIPLIST（压缩列表）、REDIS_ENCODING_SKIPLIST（跳跃表）
