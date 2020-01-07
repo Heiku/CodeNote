@@ -49,5 +49,24 @@ public int hashCode() {
 * Checked Exception: 编译器可检测的异常（ClassNotFoundException、IOException）
 * Runtime Exception: 运行期间产生的异常（NullPointerException、IndexOutOfBoundsException）
 
+### ClassLoader
+
+```
+class A{
+    public void m(){
+        A.class.getClassLoader().loadClass("B");
+    }
+}
+```
+
+一般在类加载的过程有三种概念上的 ClassLoader 提供使用：
+
+* CurrentClassLoader: 当前类加载器（CCL），在代码中对应就是类型 A 的类加载器
+* SpecificClassLoader: 指定类加载器（SCL），代码中对应的是 `A.class.getClassLoader()`，如果使用任意的 ClassLoader 进行加载，
+这个 ClassLoader 可以称之为 SCL
+* ThreadContextClassLoader: 线程上下文类加载器（TCCL），每个线程都会拥有一个 ClassLoader 引用，而且可以通过 
+`Thread.currentThread().setContextClassLoader(ClassLoader.classLoader) 进行切换`
+
+
 ### 引用
 [](https://www.zhihu.com/question/31203609)

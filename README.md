@@ -21,5 +21,8 @@ Note Java Knowledge Every Day
 [redis-store](/src/redis/redis_store.md)  
 [redis-full](/src/redis/redis_full.md)  
 [redis-extra](/src/redis/redis_extra.md)  
+[redis-design](/src/redis/redis_design.md)
 
-[uuid](/src/uuid/uuid.md)
+[uuid](/src/uuid/uuid.md)  
+
+[tcp/ip](/src/tcpip/tcpip.md)
