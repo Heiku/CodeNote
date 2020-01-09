@@ -307,6 +307,14 @@ private Runnable getTask() {
     }
 }
 ```
+
+
+### worker 的生命周期
+
+1. worker 在一个 while 中不断从阻塞队列中取出任务
+2. keepAliveTime 时间内获取不到任务，或则获取任务成功但执行失败，退出 while 循环，执行 `processWorkerExit()`
+3. 如果结束该 worker 之后，需要补充 worker，则重新调用 `addWorker()` 重新补充一个，否则，一个worker 的生命结束，
+等待被 GC （从 workersSet 被移除之后，这个 worker 再没有任何引用，将会被 GC）
  
 ### 引用
 [深入分析java线程池的实现原理](https://www.jianshu.com/p/87bff5cc8d8c)  

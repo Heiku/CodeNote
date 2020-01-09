@@ -69,6 +69,27 @@ ObjectMonitor 对象中有两个队列: _WaitSet 和 _EntryList，用来保存 O
 * WaitSet: 处于 wait 状态的线程，会被加入到 wait set中
 * EntryList: 处于等待锁 blocked 状态的线程，会被加入到 entry set
 
+当多个线程访问一段同步代码时，会通过 cas 将 _owner 设置为当前线程，如果失败的线程将会被挂起 block 并加入到 _entryList 列表中，
+如果调用 `wait()` 将会将释放当前线程持有的 monitor，并封装 node 加入到 _WaitSet 中，等待被唤醒。
+
+##### Wait()
+
+`ObjectMonitor.wait(jlong millis, bool interruptable, TRAPS)`
+
+1. 将当前 __线程__ 封装成 ObjectMonitor 对象 node
+2. 通过 `ObjectMonitor :: AddWaiter` 将 node 添加到 _WaitSet 中
+3. 通过 `ObjectMonitor :: exit` 释放当前的 ObjectMonitor 对象，这样其它竞争线程就可以获取该 ObjectMonitor 对象
+4. 最终底层的 `park()` 会挂起线程
+
+#### notify()
+
+`ObjectMonitor.notify(TRAPS)`
+
+1. 如果当前 _WaitSet 为空，即没有正在等待的线程，则直接返回
+2. 通过 `ObjectMonitor :: DequeueWaiter` 方法，获取 _WaitSet 列表中的第一个 ObjectWaiter 节点
+3. 根据不同的策略，将取出来的 ObjectWaiter 节点，加入到 _EntryList 或者直接通过 `Atomic :: cmpcxg_ptr` 指令
+进行自旋 cxq 竞争锁
+
 
 #### 线程中断
 
@@ -95,14 +116,8 @@ GC 时回收，如果创建 ThreadLocal 的线程一直运行，那么这个 Ent
 所以建议在使用完 threadLocal 后，在finally 中调用 remove()。
 
 ### 引用
+
 [JVM源码分析之Object.wait/notify实现](https://www.jianshu.com/p/f4454164c017)  
-
-
-
-
-
-### 引用
-
 [Thread.sleep and Thread.yield](https://www.jianshu.com/p/b65a7eba937d)  
 [深入浅出synchronized](https://www.jianshu.com/p/19f861ab749e)
  
