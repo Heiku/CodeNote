@@ -26,13 +26,16 @@ public class RemoveList {
                 list.remove(s);
             }
 
+            list.remove(s);
+
             // nothing happen
-            /*if (s.equals("Hello")){
+            if (s.equals("Hello")){
                 list.remove(s);
-            }*/
+            }
 
             // nothing happen too
             // list.remove(s);
         }
+        System.out.println(list.size());
     }
 }
