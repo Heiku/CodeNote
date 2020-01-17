@@ -29,6 +29,7 @@ public class RemoveList {
             list.remove(s);
 
             // nothing happen
+            // same with list.remove(s). when loop once, delete first element, this time cursor = size, so break iterator
             if (s.equals("Hello")){
                 list.remove(s);
             }
