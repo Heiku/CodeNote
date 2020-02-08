@@ -29,7 +29,7 @@ public class IteratorRemove {
             System.out.println("loopTimes: " + loopTimes++);
 
             String str = iter.next();
-            
+
             // when iter loop once, cursor == size = 1, break the loop, so just remove one element, list size = 1
             //list.remove(str);
 
