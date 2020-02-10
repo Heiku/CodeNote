@@ -60,7 +60,6 @@ typedef struct redisClent{
 
 将客户端中的输出缓冲区发送给客户端，并清空缓冲区。
 
-
 ### 复制
 
 Redis 的复制功能分为同步（sync）和 命令传播（command propagate）两个操作：
@@ -101,6 +100,16 @@ SYNC 命令（十分消耗资源的操作）：
 * 部分重同步：用于处理断线后重复制情况，当从服务器在断线后重新连接主服务器时，如果条件允许，主服务器可以将主从服务器
 连接断开期间执行的写命令发送给从服务器，从服务器只要接收并执行这些命令，就可以将数据库更新至主服务器当前所处的状态。
 
+#### 断点续传
+
+从 redis 2.8 开始，支持主从复制的断点续传，如果主从复制过程中，网络连接断开，那么可以接着上次复制的地方继续复制下去，而不是从头开始复制。
+
+master node 会在内存中维护一个 backlog，master 和 slave 都会保存一个 replica offset 和 master run id，其中 run id 用于
+定位 master node （不用 host + ip 是因为重启后可能会变化），offset 用来保存 backlog。如果 master 和 slave 网络连接断开，
+slave 会让 master 从上次断开的 offset 开始恢复数据，如果找不到对应的 offset， 那么执行一次 `resynchronization`。
+
+注意：  
+slave 中不会对过期 key 进行淘汰策略，而是由 master 检测并模拟一条 del 命令删除 slave 中的过期数据
 
 ### Sentinel
 

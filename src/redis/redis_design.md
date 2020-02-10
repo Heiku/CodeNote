@@ -77,9 +77,78 @@ Transparent HugePages 的操作系统，每次写命令引起的复制内存页�
 
 #### 淘汰策略
 
+allkeys-lru、volatile-ttl
+
 * volatile-lru: 从已设置过期时间的数据集（server.db[i].expires）中挑选最近最少使用的数据淘汰
 * volatile-ttl: 从已设置过期时间的数据集（server.db[i].expires）中挑选将要过期的数据淘汰
 * volatile-random: 从已设置过期时间的数据集（server.db[i].expires）中选择任意数据淘汰
 * allkeys-lru: 从数据集（server.db[i].dict）中挑选最近最少使用的数据淘汰
 * allkeys-random: 从数据集（server.db[i].dict）中任意选择数据淘汰
 * no-enviction: 禁止驱逐数据
+
+
+### 数据丢失问题
+
+* 异步复制导致的数据丢失
+
+因为 master -> slave 的复制是异步的，所以可能有部分数据还没复制到 slave，master 就宕机了，此时这部分数据丢失。
+
+* 脑裂丢失数据
+
+脑裂，某个 master 所在的机器突然脱离了正常的网络，跟其他 slave 机器不能连接，但实际上 master 还运行着。此时哨兵
+可能认为 master 宕机了，然后开始选举，将其它 slave 切换成了 master，这个时候，集群中就会存在两个 master。
+
+此时虽然某个 slave 被切换成了 master，但 client 还没来得及切换成新的 master，还继续向旧 master 写数据。因此
+旧 master 再次恢复的时候，会被作为一个 slave 挂到新的 master 上去，自己的数据会被清空，重新从新的 master 复制
+数据，而新的 master 没有 client 后写入的数据，导致部分的数据丢失。
+
+
+解决方法：
+
+```
+min-slaves-to-write 1
+min-slaves-max-log 10
+
+至少有一个 slave，数据复制和同步的延迟不能超过 10s
+```
+
+* 减少异步复制数据的丢失
+
+通过 `min-slaves-max-log` 配置，一旦 slaves 复制数据和 ack 延时过长，就认为可能 master 宕机后损失的数据太多了，
+那就拒绝写请求，这样就可以把 master 宕机时由于部分数据未同步到 slave 导致的数据丢失降低到可控范围之内。
+
+* 减少脑裂的数据丢失
+
+如果一个 master 出现脑裂，跟其他 slave 丢失连接，那么上面两个配置能确保说，如果不能继续给指定数量的 slave 发送数据，
+而且 slave 超过 10s 没有给自己 ack 消息，那么就直接拒绝客户端的写请求，因此在脑裂场景下，最多就丢失 10s 数据。
+
+### sdown & odown
+
+* sdown 是主观下线，一个 sentinel 觉得一个 master 宕机（通过 ping master， 判断时间是否超过 `is-master-down-after-milliseconds`）
+* odown 是客观下线，如果 quorum 数量 sentinel 都认为一个 master 主观下线（sdown）
+
+### quorum & majority
+
+* quorum
+
+只有大于等于 quorum 数量的 sentinel 认为 master 主观下线，sentinel 集群才会认为 master 客观下线
+
+* majority
+
+majority 代表 sentinel 集群中大部分 sentinel 节点的个数，只有大于 `max(quorum, majority)` 个节点给某个 sentinel
+ 节点投票，才能确定该 sentinel 节点为 leader，majority 的计算方式为 `num(sentinels) / 2 + 1`，所以 sentinel 集群的
+节点个数至少为3个，例如当节点个数为2时，如果一个sentinel 宕机，因为 majority 为 2，此时没有足够的 sentinel 选出 leader，
+那么无法进行故障转移。
+
+### master 选举条件
+
+如果一个 master 被认为 odown 了，而且 majority 数量的哨兵都允许主备切换，那么某个哨兵就会执行主备切换操作，根据以下条件选择：
+
+* 跟 master 断开连接的时长（如果 slave 与 master 断开连接时间超过 10 * `down-after-milliseconds`,将不适合）
+* slave 优先级
+* 复制 offset (如果 priority 相同，那么看 replica offset，offset越大说明已经复制了更多的数据，优先级越高)
+* 如果上面两条条件相同，那么选择一个 run id 比较小的 slave
+
+
+
+[Redis Sentinel文档](https://redis.io/topics/sentinel)  
