@@ -15,6 +15,7 @@ Note Java Knowledge Every Day
 
 [cache](src/cache/cache.md)  
 [mysql](/src/mysql/mysql.md)  
+[mysql-sync](/src/mysql/mysql_sync.md)  
 
 
 [redis-struct](/src/redis/redis_struct.md)  
@@ -25,4 +26,6 @@ Note Java Knowledge Every Day
 
 [uuid](/src/uuid/uuid.md)  
 
-[tcp/ip](/src/tcpip/tcpip.md)
+[tcp/ip](/src/tcpip/tcpip.md)  
+
+[distributed](/src/distributed/distributed_base.md)
