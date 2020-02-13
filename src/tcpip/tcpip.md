@@ -1,4 +1,5 @@
 
+
 ### TCP 三次握手
 
 TCP 连接使用三次握手的原因：避免历史错误连接的建立，减少通信双方不必要的资源消耗
@@ -84,7 +85,7 @@ SSL(Secure Sockets Layers) / TLS (Transport Layer Security)
 
 #### 握手过程
 
-![](/img/ssl-tls.png)
+![](/img/ssl-tsl.png)
 
 ##### Client Hello
 
