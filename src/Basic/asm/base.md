@@ -6,7 +6,7 @@
 
 关键：区别在于实参到底有没有复制一份给形参, Java（值传递）传递引用的时候，实际上时传递的是引用的拷贝，都指向同一片对象堆
 内存区域   
-[PassByValueOrRef.java](/src/base/PassByValueOrRef.java)
+[PassByValueOrRef.java](/src/Basic/base/PassByValueOrRef.java)
 
 
 ### hashCode()
