@@ -6,7 +6,7 @@
 LOCK#：处理器提供一个 LOCK#，当一个处理器在总线上输出此信号时，其它处理器的请求将被阻塞，那么该处理器就能独自共享内存。
 
 缓存一致性：缓存一致性会阻止同时修改由两个以上处理器的内存区域数据，当其他处理器回写被锁定的缓存行数据时，会使其他处理器的缓存行失效。
-联想 `CPU Cache Line` [CPUCache](/src/Baisc/cpu/CPUCache.java)
+联想 `CPU Cache Line` [CPUCache](/src/Basic/cpu/CPUCache.java)
 
 那么，既然有了缓存一致性，为什么还需要 volatile 呢？  
 volatile 保证了当数据改动的时候，在写入操作后加入 store屏障（LOCK# 指令），使得数据能够立即写入到缓存，而缓存有了缓存一致性
