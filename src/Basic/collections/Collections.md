@@ -1,7 +1,8 @@
 
 ### HashMap
 
-#### 为什么hashMap的长度要保持在 2的整数幂?  
+#### 为什么 HashMap 的长度要保持在 2 的整数幂?  
+
 因为这样, hash() & len - 1 的时候，才能构造出 0000 1111 类似这样的低位掩码  
 类似于 0010 0101 & 0000 1111  
 0101    
@@ -9,8 +10,9 @@
 
 
 #### 为什么hash() 能减少发生冲突的概率？
-因为hashMap 在1.8里加入了 扰动函数 -> hash()， h = hashcode(key) ^ (h >>> 16)  
-意思就是说将hashcode的 左16 与 右16 进行异或，充分混乱 hash 码的高位与低位，以此增加了低位的随机性
+
+因为 HashMap 在 1.8 里加入了 扰动函数 -> hash()， h = hashcode(key) ^ (h >>> 16)  
+意思就是说将 hashcode 的 左16 与 右16 进行异或，充分混乱 hash 码的高位与低位，以此增加了低位的随机性
 
 ```
 static final int hash(Object key) {
@@ -19,11 +21,11 @@ static final int hash(Object key) {
 }
 ```
 
-
 tableSizeFor 目的是找到 capacity 接近于 2^n 的数值，通过多个位右移，使低位都为1.
 0100 0000   >>>1  0010 0000  |=  0110 0000  
 0110 0000   >>>2  0001 1000  |=  0111 1000  
 使最高位上的1后面的位全为1，最后 +1 得到我们想要的 2的整数次幂的值
+
 ```
 static final int tableSizeFor(int cap) {
     int n = cap - 1;
@@ -37,6 +39,7 @@ static final int tableSizeFor(int cap) {
 ```
 
 #### 为什么 HashMap 不安全？
+
  * 首先，多线程在插入数据时，进行resize扩容的过程中，每个线程都有机会进入到方法中进行扩容操作，而在1.7中，因为
 扩容后的链表会倒叙，所以但线程切换时，有可能会出现上一个线程持有数组下标节点，而下一个线程已经修改扩容完了，
 所以上一个线程在持有节点的时候，不知道已经扩容完，等到其扩容时，节点间形成环，导致cpu 100%
@@ -55,6 +58,7 @@ void transfer(Entry[] newTable, boolean rehash) {
     }
 }
 ```
+
 1.7的扩容思路是，遍历oldTable 中的 entry, 重新计算 hash 后，定位到 newTable[i] 中，每次遍历都会取到该位置下的首节点 head，
 将 head 作为 当前节点的 next，这样就完成了新节点的插入操作。但这样的扩容会因为在倒序插入这样的特点下，形成闭环。
 
@@ -71,6 +75,7 @@ void transfer(Entry[] newTable, boolean rehash) {
 
 
 ### ConcurrentHashMap
+
 1.7 分段锁，segment extends ReentrantLock  (Segment[] + HashEntry[])  
 1.8 采用CAS + Synchronized  
 
@@ -92,14 +97,11 @@ void transfer(Entry[] newTable, boolean rehash) {
 如果发现当前位置是 MOVE 状态，说明正在扩容中，当前位置 node 属于 ForwardingNode，因为 forwardingNode(nextTable) 是在
 nextTable 上，所以直接通过 forwardingNode.find() 直接找到对应得节点数据。
 
-
 * size()：添加 addCount()：添加的两个对象分别是 baseCount + CounterCell[]，都使用volatile进行修饰  
 一般来说采用 cas的方式增长 baseCount，如果失败的话，那么就采用 cas的方式添加到 CounterCell[]中，  
 如果还是失败，采用for(;;)死循环添加，在添加的过程可以 通过参数 check去检查扩容  
 
 统计长度的话，就可以采用 baseCount + for()遍历 CounterCeil[]的方式  累加
-
-
 
 #### 扩容分析
 
@@ -127,8 +129,6 @@ synchronized(f),对头节点进行加锁，创建高低节点 lowNode、highNode
  
 如果槽位节点是红黑树节点，还是根据高低位lo，hi，树节点转换成两条链表，接着再将链表重新构造红黑树
  
-  
-
 ### HashSet
 
 内部就是一个map，只是将所有的值当作 map 中的 key，存放到map 中，如果map 中已经存在该(key, object)，

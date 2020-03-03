@@ -1,7 +1,7 @@
 
 ### UUID
 
-uuid(universally unique identifier) 用于表示唯一的业务id，通常用于用户ID, 订单ID， 信息ID
+uuid(universally unique identifier) 用于表示唯一的业务id，通常用于用户ID, 订单ID, 信息ID
 
 ### 本地 UUID
 
@@ -41,7 +41,7 @@ Redis 主要是利用了 incr 和 incrBy 指令，通过Redis 的单线程保证
 
 ### SnowFlake
 
-雪花算法（SnowFlake）生成的 id 是一个64bit 的整数 （实现 [SnowFlake](/src/uuid/SnowFlake.java)）
+雪花算法（SnowFlake）生成的 id 是一个64bit 的整数 （实现 [SnowFlake](/src/Basic/uuid/SnowFlake.java)）
 
 * 1 bit: 符号位，不做处理
 * 41 bit: 用于记录时间戳，可以持续记录69年
