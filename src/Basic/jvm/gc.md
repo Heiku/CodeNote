@@ -218,6 +218,10 @@ G1（Garbage First）是 JDK1.7 提供的一个在工作在新生代和老年代
 
 ![](/img/g1.webp)
 
+* E: eden
+* S: Survivor
+* H: humongous object(新对象超过 region 大小的一半 1M - 32M)
+
 使用 G1 收集器时，Java 堆的内存布局与其他收集器有很大区别，整个 Java 堆会被划分为多个大小相等的独立区域 Region，新生代和老年代不再是
 物理隔离，都是一部分的 Region 的集合。G1 会跟踪各个 Region 的垃圾收集情况（回收空间大小和回收消耗时间），维护一个优先列表，根据允许的
 收集时间，优先回收价值更大的 Region，避免在整个 Java堆上进行全区域的垃圾回收，确保了G1 收集器可以在有限的时间内尽可能收集更多的垃圾。
@@ -228,9 +232,10 @@ mixed gc:
 垃圾回收的耗时时间进行控制。
 
 mixed gc的执行过程类似于 cms，主要为：
-1. initial mark: 初始化标记过程，整个过程 stop-the=world，标记了 GC Roots 可达的对象
-2. concurrent marking: 并发标记对象，整个过程 gc collector 线程与应用程序可以并行执行，标记出 GC Root 可达对象衍生出去
-的存活对象，并收集各个 Region 的对象信息。
+1. initial mark: 标记 GC Roots 能直接关联的对象并修改 TAMS（Next Top At Mark Start）的值，让下阶段用户并发运行时，能在
+正确的可用的 Region 中创建对象，需要 stop-the-world
+2. concurrent marking: 并发标记对象，递归扫描整个堆中的对象图，找出存活的对象，并收集各个 Region 的对象信息。
+这个阶段耗时较长，但能与用户线程并发执行。
 3. remark: 最终标记过程，整个过程 stop-the-world，标记出那些并发标记过程中遗漏的，或者内部引用变化的对象
 4. clean up: 垃圾清理过程，如果发现一个 Region 中没有存活的对象，则把该 Region 加入到空闲列表中
 

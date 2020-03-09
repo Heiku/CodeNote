@@ -64,7 +64,7 @@ void transfer(Entry[] newTable, boolean rehash) {
 ![](/img/hashmap1.7.webp)
 
 想象一下，原来的数组 oldTable[3] a -> b -> c，  
-然后进行扩容，多个线程在争夺，假如线程A 先完成扩容（线程B 并不知情），这时在 newTable[7] c -> b -> a，倒序  
+然后进行扩容，多个线程在争夺，假如线程 A 先完成扩容（线程B 并不知情），这时在 newTable[7] c -> b -> a，倒序  
 这时切换到了B 执行，先从a 开始，正常 newTable[7] a，  
 然后开始插入 oldTable 中的 b，正常 newTable[7] b -> a，因为在线程A 中因为 b -> a，所以继续插入a，  
 那么就会到时 a.next = newTable[7] b，即 a.next = b，a -> b, b -> a，就形成了闭环。
