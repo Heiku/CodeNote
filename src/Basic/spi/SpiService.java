@@ -8,5 +8,5 @@ package Basic.spi;
  */
 public interface SpiService {
 
-    public void hello();
+    void hello();
 }
