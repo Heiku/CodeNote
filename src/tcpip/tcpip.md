@@ -168,4 +168,5 @@ Nagle 算法虽然能够在数据包较小时提高网络带框的利用率，�
 [为什么 DNS 使用 UDP 协议 · Why's THE Design?](https://draveness.me/whys-the-design-dns-udp-tcp)  
 [SSL/TLS协议运行机制的概述](https://www.ruanyifeng.com/blog/2014/02/ssl_tls.html)  
 [如何理解传输层的TCP面向字节流，UDP面向报文？](https://www.zhihu.com/question/341865775)  
-[TCP 流协议和消息分帧的理解](https://blog.csdn.net/lianliange85/article/details/50194975)
+[TCP 流协议和消息分帧的理解](https://blog.csdn.net/lianliange85/article/details/50194975)  
+[为什么 TCP 协议有粘包问题](https://draveness.me/whys-the-design-tcp-message-frame)  
