@@ -1,4 +1,4 @@
-package Basic.lambda;
+package Basic.lambda.stream;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

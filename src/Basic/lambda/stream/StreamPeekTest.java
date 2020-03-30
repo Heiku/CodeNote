@@ -4,7 +4,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * peek 使用 Consumer 消费流中的元素，但是返回的l流还是包含原来流中的元素
+ * peek 使用 Consumer 消费流中的元素，但是返回的流还是包含原来流中的元素 (类似于存了一份快照)
  * <p>
  * （对比两次 peek）
  *
