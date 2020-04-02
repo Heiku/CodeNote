@@ -166,6 +166,33 @@ static class Entry<K,V> extends HashMap.Node<K,V> {
 }
 ```
 
+
+### 排序
+
+`Collections.sort()` 会将集合转化成数组arr，并调用 `Arrays.sort()` 对数组进行排序。
+
+如果只是纯数组，会使用 `DualPivotQuicksort.sort()` 双端快排，避免了某些极端情况下，普通快排退化成 O(n^n)
+如果指定了 Comparator，那么会使用 `TimSort.sort()` 进行排序
+
+* TimSort
+
+现实中的大多数数据通常是有部分已经排序好的数据块，TimSort 称这些已经排序好的数据块们为 "Natural runs"，
+我们可以将其视为一个一个的 "分区"。在排序时，TimSort 迭代数据元素，将其放到不同的 run 里，同时针对这些 run，
+按规则进行合并至只剩一个，则这个仅剩的 run 即为排好序的结果。
+
+也就是说，TimSort 的大致思想是先采用 __插入排序__ 将非常小的 run 扩充为大的 run，然后采用 __归并排序__ 来合并多个 run，
+所以 TimSort 实际为 __归并排序__。具体来说，我们需要定义一个参数 minrun，当 run 长度小于 minrun时，我们认为他是非常
+小的 run，否则认为他是较大的 run。
+
+
+```
+1. 扫描数组，确定其中的单调上升段和严格单调下降段，将严格下降段反转
+
+2. 定义最小片段长度 minrun，短于此的单调片段通过插入排序集中为长于此的片段
+
+3. 反复归并一些相邻片段，过程中避免归并长度相差很大的片段，直至整个排序完成，所以分段选择策略可以保证 O(n logn)
+```
+
 ### 引用
 
 [HashMap? ConcurrentHashMap?](https://crossoverjie.top/2018/07/23/java-senior/ConcurrentHashMap/)  
