@@ -74,7 +74,7 @@ ThreadPoolExecutors 中使用了 ctl 用来表示线程池中的重要数据：�
 1. RUNNING: 111，该线程池会接收新任务，并处理阻塞队列中的任务
 2. SHUTDOWN: 000，该线程池不会接收新任务，但会处理阻塞队列中的任务
 3. STOP: 001，该线程池不会接收新任务，也不会处理阻塞队列中的任务，且会中断正在运行中的任务
-4. TIDYING: 010，所有任务终止，调用 terminated() 切换位 TERMINATED 状态
+4. TIDYING: 010, 所有的任务都已经终止，workerCount 的数目为0，资源释放
 5. TERMINATED: 011，线程池彻底终止
 
 ```
