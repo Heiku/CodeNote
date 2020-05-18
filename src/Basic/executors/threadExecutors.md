@@ -308,6 +308,44 @@ private Runnable getTask() {
 }
 ```
 
+### worker
+
+线程池需要管理线程的生命周期，需要在线程长时间不运行的时候进行回收，线程池使用一张 Hash 表去持有线程的引用，
+这样就可以通过添加引用、移除引用这样的操作控制线程的声明周期，那么问题在于如何判断线程是否在运行呢？
+
+```
+private final HashSet<Worker> workers = new HashSet<Worker>();
+```
+
+worker 通过继承 AQS，使用 AQS 实现独占锁的功能。不使用 ReentrantLock 而是 AQS，目的是为了实现不可重入的特性
+去反应线程现在的状态。
+
+1. lock() 一旦获取独占锁，表示当前线程正在执行任务中
+2. 如果正在执行任务，则不应该中断线程
+3. 如果该线程现在不是独占锁的状态，也就是空闲的状态，说明它没有正在处理任务，这时可以对该线程进行中断
+4. 线程池在执行 `shutdown()` 或者 `tryTerinate()` 会调用 `interruptIdleWorkers()` 中断空闲的线程，会使用 `tryLock()` 方法
+判断线程池中的线程是否是空闲的状态，如果线程是空闲状态则可以安全回收。
+
+```
+mainLock.lock();
+    try {
+        for (Worker w : workers) {
+            Thread t = w.thread;
+            if (!t.isInterrupted() && w.tryLock()) {
+                try {
+                    t.interrupt();
+                } catch (SecurityException ignore) {
+                } finally {
+                    w.unlock();
+                }
+            }
+            if (onlyOne)
+                break;
+        }
+    } finally {
+        mainLock.unlock();
+    }
+```
 
 ### worker 的生命周期
 
@@ -315,6 +353,38 @@ private Runnable getTask() {
 2. keepAliveTime 时间内获取不到任务，或则获取任务成功但执行失败，退出 while 循环，执行 `processWorkerExit()`
 3. 如果结束该 worker 之后，需要补充 worker，则重新调用 `addWorker()` 重新补充一个，否则，一个worker 的生命结束，
 等待被 GC （从 workersSet 被移除之后，这个 worker 再没有任何引用，将会被 GC）
- 
+
+
+##### execute 过程
+
+1. 如果线程池的状态不是 RUNNING，直接拒绝。
+2. 如果 workerCount < corePoolSize，那么创建一个线程执行提交的任务 addWorker(firstTask)
+3. 如果 workerCount >= corePoolSize, 且线程池内的阻塞队列未满，那么直接加入到阻塞队列中。
+4. 如果 workerCount >= corePoolSize && workerCount < maximumPoolSize，且阻塞队列 __已满__，则创建线程执行提交的任务
+5. 如果 workerCount >= maximumPoolSize，并且线程池内的阻塞队列已满，则根据拒绝策略处理任务，默认的是直接抛出异常 abort
+
+#### Q&A
+
+* 线程池创建之后，提前创建线程（线程池预热）
+
+线程池在创建之后，如果没有任务加入，是不会构建 worker 创建线程的，可以采用 `preStartAllCoreThreads()` 提前创建好所有的
+核心线程。
+
+```
+public int prestartAllCoreThreads() {
+    int n = 0;
+    while (addWorker(null, true))
+        ++n;
+    return n;
+}
+```
+
+* 核心线程可以被回收吗？
+
+核心线程数默认不会被回收，如果需要回收，可以调用 `allowCoreThreadTimeOut(true)`
+
+
+
 ### 引用
 [深入分析java线程池的实现原理](https://www.jianshu.com/p/87bff5cc8d8c)  
+[Java线程池实现原理及其在美团业务中的实践](https://mp.weixin.qq.com/s?__biz=MjM5NjQ5MTI5OA==&mid=2651751537&idx=1&sn=c50a434302cc06797828782970da190e&chksm=bd125d3c8a65d42aaf58999c89b6a4749f092441335f3c96067d2d361b9af69ad4ff1b73504c&scene=21#wechat_redirect)  
