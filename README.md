@@ -15,6 +15,7 @@ Note Java Knowledge Every Day
 
 [mysql](/src/mysql/mysql.md)  
 [mysql-sync](/src/mysql/mysql_sync.md)  
+[mysql_log](/mysql/mysql_application.md)  
 
 [cache](src/cache/cache.md)  
 [redis-struct](/src/redis/redis_struct.md)  
