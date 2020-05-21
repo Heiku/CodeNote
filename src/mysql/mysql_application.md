@@ -49,6 +49,35 @@ set autocommit = 0，意味着不会自动提交事务，除非自己 commit 或
 select * from information_schema.innodb_trx where TIME_TO_SEC(timediff(now(),trx_started))>60
 ```
 
+事务开始：事务开始的时候，会启动一个视图 read-view。
+
+InnoDB 在实现 MVCC 时用到了 一致性读视图，即 Consistent read view，用于支持 RC(Read Committed)和 RR(Repeatable Read)
+隔离级别的实现。
+
+```
+begin/start transaction 并不是一个事务的起点，而是执行的第一条语句（select/update/....）
+
+start transaction with consistent snapshot  可以马上启动一一个事务
+```
+
+InnoDb 里面每个事务都会有一个唯一的事务id，transaction id。在事务开始的时候向 InnoDb 的事务系统申请的，按申请顺序严格递增的。
+
+每行数据是有多个版本的，每次事务更新数据的时候，都会生成一个新的数据版本，并且把 transaction id 赋值给这个数据版本的事务，
+记为 row trx_id。同时，旧的数据版本也会保留，并且在新的版本中，能够有信息可以直接拿到它。
+
+![](/img/mysql-transaction-snaphot.png)
+
+undo log 根据图中的 U3 U2 U1 计算。
+
+##### 事务视图
+
+InnoDb 为每个事务构造了一个数组，用来保存这个事务启动瞬间，当前正在 ”活跃“ 的所有事务ID，”活跃“ 指的是启动但未提交。
+
+数组里面事务ID 得最小值记为低水位，当前系统里面已经创建过得事务 ID 的最大值加1为高水位。
+
+![](/img/mysql-transaction-water-level.png)
+
+
 
 ### 锁
 
@@ -99,3 +128,33 @@ B事务的 update 会被阻塞，直到事务 A 执行 commit 之后才会释放
 
 在 InnoDB 事务中，行锁是需要的时候才加上的，但并不是不需要了就立刻释放，而是等到事务结束时才释放。__所以在事务中，
 如果事务中需要锁住多个行，要把可能造成锁冲突、最可能影响并发度的锁往后放__。
+
+###### 死锁
+
+```
+A           B
+update1
+            update2
+update2
+            update1
+commit
+            commit
+```
+
+* innodb_lock_wait_timeout
+
+默认为50s，最好不要修改，如果修改的太小，有可能因为实际操作的耗时较长导致的误伤。
+
+* 死锁检测
+
+主动发起死锁检测，发现死锁之后，主动回滚死锁链条中的某一个事务，让其他事务能够执行。 `innodb_deadlock_detect=on`默认开启。
+
+
+```
+delete 1w
+
+1. delete * from T limit 100000;    // 一次锁住的行太多，其他客户端等待时间长
+2. 一个连接循环20次 limit 5000         // 分为多次短事务，每次事务占用的时间较短，每次执行使用不同分段的资源，提高并发量
+3. 20个连接 limit                  // 自己制造锁竞争，并发量下降
+```
+
