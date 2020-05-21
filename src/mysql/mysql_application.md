@@ -50,3 +50,52 @@ select * from information_schema.innodb_trx where TIME_TO_SEC(timediff(now(),trx
 ```
 
 
+### 锁
+
+##### 全局锁
+
+全局锁对整个数据块实例加锁，整个库处于只读状态 `Flush tables with read lock`，其他线程的增删改、建表、事务提交等操作
+都将被阻塞。可用于全库的逻辑备份。
+
+##### 表级锁
+
+1. 表锁
+
+`lock table ... read/write`，例如 `lock tables t1 read, t2 write`，那么只能对 t1 读，t2 读写，无法访问其他表。
+
+2. MDL(Metadata Lock)
+
+MDL 保证了在表结构被修改的时候，读写的正确性。当对一个表做 CRUD 的时候，加上 MDL 读锁；当对表结构做变更操作的时候，
+加 MDL 写锁。
+
+* 读锁之间不互斥，因此可以有多个线程同时对一张表增删改查
+* 读写锁、写锁之间是互斥的，用来保证变更结构操作的安全性。因此如果有两个线程要同时对同一个表加字段，其中一个要等到
+另一个执行完才能开始执行。
+
+```
+sessionA select  读锁
+sessionB select  继续加读锁
+sessionc alter field    修改字段加写锁，与读锁互斥，必须等待读锁释放
+sessionD select  加读锁失败，必须等待写锁释放
+
+如果读请求得客户端有重试机制，直接新建session发起读请求，这样会一致僵持，到时线程资源占用。
+
+可以采用加上超时时间得方式尝试添加字段
+alter table T wait/nowait add column
+```
+
+###### 行锁
+
+```
+A           B
+update 1
+update 2
+            update 1
+commit
+            commit
+
+B事务的 update 会被阻塞，直到事务 A 执行 commit 之后才会释放 1 的行锁
+```
+
+在 InnoDB 事务中，行锁是需要的时候才加上的，但并不是不需要了就立刻释放，而是等到事务结束时才释放。__所以在事务中，
+如果事务中需要锁住多个行，要把可能造成锁冲突、最可能影响并发度的锁往后放__。
