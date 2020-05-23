@@ -208,4 +208,10 @@ undo页，以及 change buffer 页等等。change buffer 写入到 redo log 之�
 change buffer 持久化文件为 idbdata1.  
 索引页的持久化文件为 t.ibd.
 
+#### Mysql 选错索引
 
+```
+analyze table t;    重新痛惜索引信息（索引基数）
+
+select * from table force(a) where a between 100 and 200    索引修正
+```
