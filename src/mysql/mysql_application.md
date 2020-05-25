@@ -215,3 +215,119 @@ analyze table t;    重新痛惜索引信息（索引基数）
 
 select * from table force(a) where a between 100 and 200    索引修正
 ```
+
+
+#### 字符串索引
+
+前缀索引: alter table T add index(email(6))，可以减少索引占用的空间，但是可能会存在多条记录回表，精确度不够。
+倒叙索引：select a from T where a = reverse('')
+hash索引：alter table t add id_card_crc int unsigned, add index(id_card_crc);  精确度高，但需要额外空间存储 hash 值，
+同时计算的过程中会消耗更多的 CPU。
+
+
+#### 抖动
+
+InnoDb 中的更新语句都是会根据 WAL 先写入 redo log，等待实际再更新磁盘。再将脏页刷入磁盘的时候，就有可能产生”抖动“。
+
+抖动产生的例子:  
+1. 一个查询要淘汰的脏页个数太多，会导致查询的响应时间明显变长
+2. 日志写满，更新全部堵住，写性能跌为0
+
+
+脏页：内存数据页与粗盘数据页内容不一致。
+干净页：内存数据写入到磁盘后，内存和磁盘的数据页内容一致。
+
+1. redo log 写满了
+2. 系统内存不足，当需要新的内存页时，就需要淘汰”脏页“，将脏页写入到磁盘上。
+3. 系统空闲的时候，在适当的时候写入磁盘
+4. Mysql 正常关闭，将内存的脏页 flush 磁盘上。
+
+
+```
+innodb_io_capacity 和 关注脏页的占用比例
+
+select VARIABLE_VALUE into @a from global_status where VARIABLE_NAME = 'Innodb_buffer_pool_pages_dirty';
+select VARIABLE_VALUE into @b from global_status where VARIABLE_NAME = 'Innodb_buffer_pool_pages_total';
+select @a/@b;
+```
+
+#### 数据删除，表文件不变
+
+innodb_file_per_table
+
+1. OFF: 表的数据放在系统共享表空间，与数据字典放在一起
+2. ON: 每一个 InnoDb 表数据存储在一个 .idb 文件中, 推荐使用
+
+* 表删除
+
+在删除数据时，只是将对应页上的数据行 __标记__ 为删除，如果下次在这个位置上插入数据时，可以直接复用，
+当然如果两个数据页的利用率很低，那么系统会合并这两个数据页。所以如果我们 delete 数据，只是将数据页
+标记为 “已删除”，磁盘文件大小无变化。
+
+可以使用 `alter table T engine=InnoDB` 重建表，本质上是新建表迁移数据并更新表名。但这个过程原表A的新记录可没有
+写入到新表，所以可以使用 Online DDL 的方式，类似于 Redis 的主从，是先进行快照将数据迁移，然后对 A 的更新都记录
+到日志文件（row log）中，最后将日志文件中的记录写入到临时文件B中。
+
+区分一下：  
+1. alter table T engine = InnoDB: 重建表，减少页空间的浪费
+2. analyze table T: 对表的索引信息进行重新统计（用于处理索引数据错误的文图），并不修改数据，加 MDL 读锁
+3. optimize table: recreate + analyze
+
+
+#### count(*)
+
+Engine: 
+1. MyISAM 会把一个表的总行数（not where）存储在磁盘上，执行 count(*) 的时候可以直接返回
+2. InnoDb 则需要把数据一行一行地从引擎中读出来，然后累积计数。
+
+InnoDb 的优化：  
+普通索引树比主健索引树小很多，对于 count(*) 遍历哪种索引树的结果都是一样的，所以在保证逻辑正常的情况下，
+尽量减少扫描的数据量。注意：show table status 中的 TABLE_ROWS 存在误差。
+
+区分：  
+1. count(id): 遍历主键表，然后取id，返回给 server 层，server判断如果不为空+1
+2. count(1): 遍历整张表，但不取值，server放入数字”1“，判断不为空之后，进行累加，
+相比于count(id)不解析数据行，草被字段值，更快一些
+3. count(字段): 类似 count(id)，取出每一行的字段，然后判断是否为空，不为空+1
+4. count(*): 额外优化，不取字段，只计算数据行，挑占用空间更少的索引树进行计算。
+
+count(字段) < count(id) < count(1) <= count(*)
+
+#### 日志索引问题
+
+![](/img/mysql-innodb-redo-log-bin-log-process.png)
+
+如果在 redo log 写入后失败，那么系统恢复之后进行事务回滚。  
+如果在 bin log 写入后，在 commit 之前失败，那么会有以下情况：  
+1. 如果 redo log 中事务完整（commit），那么直接提交
+2. 如果 redo log 中只有 prepare，则判断对应事务 binlog 是否存在并完整：如果bin log 完整提交，不完整则回滚。
+
+* bin log 完整性？
+
+statement 格式中bin log有 COMMIT，row 格式中，最后有 XID event
+
+* redo log / bin log 如何关联？
+
+两者有公共数据字段 XID, 当系统崩溃时，会按照顺序扫描 redo log，如果既有 prepare 又有 commit，直接提交。否则再查 bin log。
+
+* 为什么需要先 redo log，再 bin log？
+
+为了保证主从的一致性，如果写完 bin log 之后崩溃，这时bin log 已经写入，之后就会被从库读取。
+
+* 是否可以直接使用 binlog? 
+
+历史遗留问题，bin log 本身并不支持 crash safe，崩溃恢复的功能，还是需要 Innodb 自身的 redo log 提供支持。
+反之，也不能只用 redo log，因为本身时循环日志写，历史日志无法保留，无法起到归档的作用。同时Mysql server 层的
+主从同步复制主要还是通过 bin log 实现。
+
+#### Order
+
+Order By 通常是使用索引得到的数据后回表查找select 对应的数据行，然后再内存中 sort_buffer 中进行快速排序，
+如果数据量太大内存放不下的情况，就需要使用临时文件排序，将部分数据加载到内存然后最终在多个临时文件中进行归并排序，
+最终形成一个有序的临时文件。
+
+`max_length_for_sort_data` 如果单行的长度太大（字段多且大），加载到内存排序的时候无法一次性完成，会通过临时文件。
+这时会使用 rowId 排序，对内存中 sort_buffer 的字段主键映射（name-id）排序后，取主键进行回表，最终得到数据行。
+整个过程多一次回表。
+
+可以利用 联合索引 本身有序的方式减少排序带来的性能消耗。(city-name)
