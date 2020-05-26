@@ -113,4 +113,12 @@ note: 在生产环境中，尽量避免大 key，因为大 key 在迁移的过�
 redis-cli -h 127.0.0.1 -p 7001 --bigkeys -i 0.1 每隔 100 条 scan 指令就会休眠 0.1s
 ```
 
+#### transaction
+
+multi/exec/discard: 所有指令在 exec 之前不执行，而是缓存在服务器的事务队列中，直到exec指令，才开始执行事务队列。
+当事务中间执行失败后，后续指令仍能继续执行。
+
+watch 会在事务开始之前关注1或多个变量，当事务执行后，即服务器收到 exec 指令执行缓存的事务队列的时候，如果被 watch 
+的变量被修改了，exec 会返回事务失败。
+
 [redis-interview-collect](https://mp.weixin.qq.com/s/-y1zvqWEJ3Tt4h39Z0WBJg)
