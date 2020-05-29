@@ -331,3 +331,57 @@ Order By 通常是使用索引得到的数据后回表查找select 对应的数�
 整个过程多一次回表。
 
 可以利用 联合索引 本身有序的方式减少排序带来的性能消耗。(city-name)
+
+#### SQL 性能差异
+
+1. 条件字段函数操作
+
+```
+select count(*) from tradelog where month(t_modified)=7
+```
+
+2. 隐式类型转换
+
+```
+id(varchar) select * from table T where id = 2;
+
+select * from table T where CAST(traid as signed int) = 2;
+优化器会对字段进行函数转换，放弃树的搜索功能，导致全表扫描
+```
+
+3. 隐式字符编码转换
+
+```
+多表连接的时候如果字符集不同，会使用编码转换函数修改索引值，导致索引失效。
+select * from trade_detail where CONVERT(traideid USING utf8mb4)=$L2.tradeid.value;
+```
+
+#### join
+
+优化器会自动选择 __小表驱动大表__，减少复杂度和磁盘IO
+
+#### 查询一行时间长
+
+1. 等待 MetaDataLock
+
+```
+lock tables t write;
+show processlist;
+unlock tables
+
+select blocking_pid where sys.schema_table_lock_waits;
+```
+会使其他的 select 进行等待锁阶段，可以将阻塞的 pid kill 掉。
+
+2. 等待 flush
+
+```
+select * from information_schema.processlist where id=1; (waiting for table flush)
+
+flush tables t with read lock;
+flush tables with read lock;
+关闭表
+```
+
+3. 等待锁
+
