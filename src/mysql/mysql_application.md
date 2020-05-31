@@ -385,3 +385,50 @@ flush tables with read lock;
 
 3. 等待锁
 
+之前的例子都是表级别锁，而等待锁进入到了执行引擎中。
+
+```
+    A                               B
+    begin
+    update c = c + 1 where id = 1;
+                                    select * from t where id = 1 lock in share mode;
+
+A 事务如果一直不提交，B 将一直阻塞在等待锁状态。
+```
+
+可以通过 sys.innodb_lock_waits 表查到具体信息，及时 kill 对应的pid，释放锁
+
+
+```
+A                               B
+start transaction with consistent snapshot;
+                                update t set c = c+1 where id = 1;(加锁执行100w次)
+select * from t where id = 1;
+select * from t where id = 1 lock in share mode;
+
+lock in share mode，为当前读，所以可以直接读到执行后的结果 1000001，
+select * from; 快照读，所以需要从 1000001 开始，依次执行 undo log，才返回事务开始的数据 1。
+```
+
+#### 幻读
+
+```
+begin;
+select * from t where id = 1 for update;    
+commit;
+
+select 语句执行完成之后，会在这一行加一个写锁，由于两段锁协议，写锁将会在执行 commit 的时候释放。
+```
+
+幻读：行锁只能锁住行，但是新插入记录的动作，要更新的是记录之间的“间隙”，所以需要“间隙锁”-GAP LOCK。
+
+```
+0 5 10 15 20
+
+(-∞,0) (0,5) (5,10) (10,15) (15,20) (20,+∞)
+```
+
+间隙锁和行锁合称为 next-key lock，每个 next-key lock 都是前开后闭区间。(-∞,0],(0,5]...  
+间隙锁的引入，可能会导致同样的语句锁住更大的范围，影响了并发度，避免可以采用读提交的隔离界别，但需要把
+binlog 格式设置成 row，避免数据与日志不一致的情况。
+
