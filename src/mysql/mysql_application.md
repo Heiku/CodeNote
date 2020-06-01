@@ -432,3 +432,161 @@ select 语句执行完成之后，会在这一行加一个写锁，由于两段�
 间隙锁的引入，可能会导致同样的语句锁住更大的范围，影响了并发度，避免可以采用读提交的隔离界别，但需要把
 binlog 格式设置成 row，避免数据与日志不一致的情况。
 
+
+#### 改一行，锁多行
+
+加锁规则：
+
+1. 原则 1：加锁的基本单位为 next-key lock，前开后闭
+2. 原则 2：查找过程中访问到的对象才会加锁
+3. 优化 1：索引上的等值查询，给 __唯一索引__ 加锁的时候，next-key lock 退化成行锁
+4. 优化 2：索引上的等值查询，向右遍历时且 __最后一个值__ 不满足等值条件的时候，next-key lock 退化成间隙锁。
+5. 唯一索引上的范围查询会访问到不满足条件的第一个值为止
+
+
+* 等值查询间隙锁
+
+```
+A               B               C
+begin
+update t set d=d+1 where id = 7;
+                insert into t values (8,8,8)
+                (blocked)
+                                update t set d=d+1 where id=10;
+                                (query ok)
+
+(5,10]，next-key lock，所以session B 失败，因为第7行没有可以锁住的，优化2退化间隙锁，所以 session C 正常获得锁并更新
+```
+
+* 非唯一索引等值锁
+
+```
+A               B               C
+begin;
+select id from t where c = 5 lock in share mode;
+                update t set d=d+1 where id = 5;
+                (Query ok)
+                                insert into t values (7,7,7)
+                                (blocked)
+
+(0,5] 因为非唯一索引，可能会有重复值，所以会继续查直到在区间 (5,10]，因为最后一个值无法等值匹配，所以退化成 (5,10)
+即锁住的区间为 (0,5] (5,10)
+
+session A 给索引 c=5 加上读锁
+
+只有访问的对象才会加锁，这个查询使用覆盖索引，并不需要访问主键，所以主键索引上没有加任何锁，
+所以session B 的语句可以执行完成（只使用了索引c，返回的数据也不用回表，锁只加在索引c上）
+
+如果是 for update，系统会认为接下来要更新数据，顺便给主键索引上满足条件的行加上行锁，即锁住实际的数据行，
+这时 session B 将被 blocked（或者 select d from t where c=5 lock in share mode）
+```
+
+* 主键索引范围锁
+
+```
+A               B               C
+begin;
+select * from t where id >= 10 and id < 11 for update;
+
+                insert into t values(8,8,8);
+                (Query OK)
+
+                insert into t values (13,13,13);
+                (Blocked)
+                                update t set d=d+1 where id = 15
+                                (Blocked)
+
+session A 要找到id=10 的行，(5,10] 因为等值匹配，所以优化一退化行锁，所以只锁住 id=10 的行，
+因为范围索引 < 11，所以到区间会寻找下一个间隙锁 (10,15] 所以 插入 8 的时候正常，插入 13 的时候被阻塞，
+
+session A 这时候锁住的范围为主键索引上，行锁 id=10，和 next-key lock (10,15]
+```
+
+* 非唯一索引范围锁
+
+```
+A               B               C
+begin;
+select * from t where c>=10 and c<11 for update;
+                insert into t values(8,8,8)
+                (blocked)
+                                update t set d=d+1 where c=15;
+                                (blocked)
+```
+
+非唯一索引，不退化成行锁，所以锁住的范围为 (5,10],(10,15]，
+
+##### 性能提升
+
+* 短连接
+
+短连接模型一旦数据块处理得慢，连接数就会暴涨，max_connections 如果超出，会报错 "too many connections"，
+数据库这时对对外服务不可用，
+
+如果连接数过多，优先断开事务外空闲太久的连接；如果还不能缓解，在考虑断开事务内空闲太久的连接。
+`kill connnection + id`
+
+* 慢查询
+
+1. 索引没设计好
+
+通过紧急加索引解决，在 MySQL 5.6 之后，创建索引支持 Online DDL，可以直接执行 alter table。  
+如果服务器是主从备份，建议先在备库中执行 `set sql_log_bin=off`，不写 binlog，然后执行 `alter table ... `
+创建索引，接着执行主从切换，这时候原来的主库需要重复执行一次这样的操作 `close binlog and alter table`
+
+建议使用 [gh-ost](https://github.com/github/gh-ost)
+
+2. SQL 语句没写好
+
+是否收到函数的影响，值转换等问题，可以通过 query_write 判断之前的语句是否正确。
+
+3. Mysql 选错了索引
+
+mysql 自己选错了索引，可以analy以下，如果没有效果，可以强制使用 force index。最好是上线前进行测试：  
+打开慢日志，并设置 long_query_time = 0，确保每个语句都会被记录，然后插入模拟数据进行回归测试，
+观察每个语句的 rows_examined 是否与预期一致。
+
+
+##### 如何保证数据不丢失
+
+##### binlog 写入机制
+
+事务执行的过程中，先把日志写到 binlog cache，事务提交的时候，再把 binlog cache 写到 binlog 文件中。
+
+系统会为 binlog 分配一片内存，每个线程一个，参数 binlog_cache_size 用于控制单个线程内 binlog cache 
+所占的内存大小，如果超过这个参数规定的大小，就要暂存到磁盘。
+
+![](/img/mysql_binlog_write.png)
+
+* write: 指的是将日志记录写道文件系统的 page cache，并没有持久化到磁盘，所以速度比较快
+* fsync: 将数据持久化到磁盘中，fsync 会占用磁盘的 IOPS
+
+write/fsync 的时机由参数 sync_binlog 控制：
+
+1. sync_binlog = 0，每次提交事务都只 write，不 fsync
+2. sync_binlog = 1，每次提交事务都会 fsync
+3. sync_binlog = N(N > 1)，表示每次提交事务都 write，但累积 N 个事务后才 fsync。能提升性能，但存在数据丢失问题。
+（100-1000）
+
+##### redo log 写入机制
+
+在事务执行的过程中，生成的 redo log 要先写到 redo log buffer 中，所以redo log 在写入的过程中，可能存在以下几种
+状态：
+
+![](/img/mysql-redo-log-redo-log-buffer.png)
+
+1. 存在 redo log buffer 中，物理上在 MySQL 进程内存中，red
+2. 写道磁盘（write），但是没有持久化（fsync），物理上是在文件系统的 page cache 里面，yellow
+3. 持久化到磁盘，对应的是 hard disk，green
+
+redo log 的写入策略由参数 `innodb_flush_log_at_trx_commit` 参数控制
+
+1. 0: 事务提交的时候只是把 redo log 留在 redo log buffer 中
+2. 1: 事务提交的时候都将 redo log 持久化到磁盘上
+3. 2: 事务提交的时候把 redo log 写到 page cache 上
+
+InnoDB 有一个后台线程，每隔1s，把 redo log buffer 中的日志调用 write 写到文件系统的 page cache，
+然后调用 fsync 持久到磁盘上。（因为后台会不定期写到磁盘，所以没提交的事务的 redo log 也可能被持久化
+到磁盘上）
+
+
