@@ -589,4 +589,28 @@ InnoDB 有一个后台线程，每隔1s，把 redo log buffer 中的日志调用
 然后调用 fsync 持久到磁盘上。（因为后台会不定期写到磁盘，所以没提交的事务的 redo log 也可能被持久化
 到磁盘上）
 
+"双1"配置：`sync_binlog` 和 `innodb_flush_log_at_trx_commit` 都设置成1，一个事务完整提交前，
+需要等待两次刷盘，一次 redo log，一次 binlog。
+
+###### LSN
+
+日志逻辑序列号（Log Sequence Number）: 对应每次redo log 的写入点，每次写入 length 时，LSN + Length
+
+group commit: 为了提升刷盘的吞吐量，在并发的多个事务中，多个事务（形成一个组）会更新 LSN 值，在写盘的时候，会带最新的 LSN，
+即一次将整个组的事务 redo log 记录写入磁盘中，节约磁盘的 IOPS。
+
+![](/img/mysql-redo-log-group-commit.png)
+
+##### WAL
+
+1. redo log 和 binlog 都是顺序写，磁盘的顺序写比磁盘的随机写快很多
+2. 组提交机制，可以大幅度降低磁盘的的 IOPS 消耗
+
+* 如果 Mysql 出现性能瓶颈，瓶颈在 IO 上，如何优化呢？
+
+1. 设置 `binlog_group_commit_sync_delay`（延时多久调用 fsync） 和 `binlog_group_commit_sync_no_delay_count`
+（累计多少次组提交才调用 fsync）参数，减少 binlog 的写盘次数。（基于“额外的等待时间”，可能会增加语句的响应时间）
+2. `sync_binlog` 设置大于1（100-1000），断电会丢数据
+3. `innodb_flush_log_at_trx_commit` 设置为2，断电丢数据
+
 
