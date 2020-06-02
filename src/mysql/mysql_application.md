@@ -516,7 +516,7 @@ select * from t where c>=10 and c<11 for update;
 
 非唯一索引，不退化成行锁，所以锁住的范围为 (5,10],(10,15]，
 
-##### 性能提升
+#### 性能提升
 
 * 短连接
 
@@ -547,7 +547,7 @@ mysql 自己选错了索引，可以analy以下，如果没有效果，可以强
 观察每个语句的 rows_examined 是否与预期一致。
 
 
-##### 如何保证数据不丢失
+#### 如何保证数据不丢失
 
 ##### binlog 写入机制
 
@@ -592,7 +592,7 @@ InnoDB 有一个后台线程，每隔1s，把 redo log buffer 中的日志调用
 "双1"配置：`sync_binlog` 和 `innodb_flush_log_at_trx_commit` 都设置成1，一个事务完整提交前，
 需要等待两次刷盘，一次 redo log，一次 binlog。
 
-###### LSN
+##### LSN
 
 日志逻辑序列号（Log Sequence Number）: 对应每次redo log 的写入点，每次写入 length 时，LSN + Length
 
@@ -612,5 +612,71 @@ group commit: 为了提升刷盘的吞吐量，在并发的多个事务中，多
 （累计多少次组提交才调用 fsync）参数，减少 binlog 的写盘次数。（基于“额外的等待时间”，可能会增加语句的响应时间）
 2. `sync_binlog` 设置大于1（100-1000），断电会丢数据
 3. `innodb_flush_log_at_trx_commit` 设置为2，断电丢数据
+
+
+#### 主备一致
+
+* 事务日志同步过程(A -> B)
+
+1. 备库B 通过 `change master` 设置主库A 的IP、端口、用户名、密码等（构建连接），以及从哪个位置开始请求binlog，
+这个位置包含了文件名和日志偏移量。
+2. 备库B 执行 `start slave` 命令，备库这时会启动两个线程，io_thread 和 sql_thread(多线程)。
+3. 主库A 校验完连接信息后，按照备库B 传过来的位置，开始读取本地 binlog，发给B
+4. 备库B 拿到 binlog 后，写道本地文件，称为中转日志（relay log）
+5. sql_thread 读取中转日志，解析日志中的命令，并执行。
+
+
+##### binlog 格式
+
+```
+查看 binlog 日志
+
+show master logs;       // 查询所有 binlog 日志
+show master status;     // 查看最后一个事件记录的日志文件及偏移量
+show binlog events in 'master.000001';      // 查看 binlog
+```
+
+* __statement__：记录了真实执行的数据行
+
+1. `SET @@SESSION.GTID_NEXT= 'ANONYMOUS'`
+2. `BEGIN`, 表示一个事务
+3. `use test``deltet * from t where ...`, use 为自动添加，保证日志传到备库执行的时候，无论当前工作线程在哪个库中，
+都能正确到执行库中更新语句。
+4. `COMMIT`
+
+缺点：在 __statement__ 格式下，记录到 binlog 的语句是原文，可能会出现在执行某条 SQL 语句的时候，
+用的是索引 a，而备库在执行这条语句的时候，却使用了索引 b，写操作存在风险。
+
+* __row__: 使用了事件标识代替了原来的执行语句（具体可以通过 `mysqlbinlog -vv data/master.0001 --start-position=8900` 解析）
+
+1. ...
+2. `Table_map event`: 表示操作的表
+3. `Delete_rows event`: 定义删除的行为
+4. `commit`
+
+使用 row 格式时，binlog 记录了真实数据行的主键id，当binlog 传入到备库的时候，会直接更新对应数据行的记录，不会存在 
+statement 的问题。
+
+* mixed
+
+1. statement 格式的 binlog 可能会导致主备不一致，所以需要使用 row 格式
+2. row 格式会占用大量的空间。比如一个 `delete * from limit 10w`，statement 只会记录这条 sql 语句中，占用几十个字节空间，
+如果使用的是 row 格式，需要把这 10w 条记录写到 binlog 中，会占用大量的空间，同时写 binlog 也会耗费 IO 资源，影响执行速度。
+3. mixed 是一个折中的方案，MySQL 会自动判断这条语句是否会引起主备不一致，如果可能的话，使用 row 格式，否则使用 statement 格式。
+
+```
+insert into t values(1, now())
+这个语句主库会在 binlog 记录 event 的时候，多记一条记录：SET TIMESTAMP = 1546103491，
+以保证在主备数据的一致，
+
+如果重放 binlog 数据的时候，可以使用 mysqlbinlog 工具解析，再交由 MySQL 执行
+mysqlbinlog master.000001 --start-position=2738 --stop-position=2973 | mysql -h127.0.0.1 -P3000 -u$user -p$pwd;
+（解析 binlog 中position 2738-2973 的记录，然后放到 Mysql 中执行）
+```
+
+
+
+
+
 
 
