@@ -1,4 +1,9 @@
 
+#### DDL DML
+
+DML(Data manipulation language): select、insert、update、delete  
+DDL(Data definition language): create、alter、delete
+
 ### Log
 
 #### WAL
@@ -675,8 +680,50 @@ mysqlbinlog master.000001 --start-position=2738 --stop-position=2973 | mysql -h1
 ```
 
 
+#### 保证高可用
+
+备库最好设置成 `readonly` 只读模式：
+
+1. 防止特殊的运营查询需求影响到备库的数据，防止误操作
+2. 防止切换逻辑 BUG，例如切换过程中的双写，造成主备不一致
+3. 利用 readonly 状态判断节点的角色
+
+##### 主备延迟
+
+* 同步延迟
+
+1. 主库A 执行一个事务，写入 binlog，T1
+2. 之后传给备库B，备库B 接收完这个 binlog，T2
+3. 备库B 执行完成这个事务，T3
+
+```
+show slave status
+
+seconds_behind_master: 计算与当前系统时间的差值
+
+备库在连接到主库的时候，会通过执行 select UNIX_TIMESTAMP() 函数去获得主库的系统时间，如果不一致，
+在计算 seconds_behind_master 会减去差值
+```
+
+正常网络情况下，日志传输到备库的时间很短（T2-T1），主要体现在备库消费中转日志（relay log）的速度，
+比主库生产 binlog 的速度更慢。
+
+##### 主备延迟来源
+
+1. 在部署的时候，备库所在的机器 __性能__ 远比主库的机器性能差
+2. __备库的压力大__，某些业务为了不影响主库上的正常业务，在备库上执行一些比较耗时的查询任务，
+导致备库上耗费了大量的 CPU 资源，影响了同步速度，造成延迟加重。
+
+解决办法：可以多接几个从库或者使用 Hadoop 这类系统，让系统外部提供统计查询的能力。
+
+3. __大事务__
+
+如果一个语句在主从执行10分钟，那么从库将会延迟10分钟，例如一次 delete 大量数据，可以分为多次事务删除。  
+除此之外，还有大表的 DDL。
 
 
+##### 可靠优先策略（HA 系统的处理）
 
 
-
+1. 判断备库的 SHM(seconds_behind_master)，如果小于某个值（5s）继续下一步，否则持续重试
+2. 
