@@ -725,5 +725,10 @@ seconds_behind_master: 计算与当前系统时间的差值
 ##### 可靠优先策略（HA 系统的处理）
 
 
-1. 判断备库的 SHM(seconds_behind_master)，如果小于某个值（5s）继续下一步，否则持续重试
-2. 
+1. 判断备库的 SHM(seconds_behind_master)，如果小于某个值（5s）继续下一步，否则持续重试 
+2. 把主库 A 改成只读状态，即把 readonly 设置成 true
+3. 判断备库的 SHM 值，直至变为 0 即已经完全同步为止
+4. 把备库 B 改成读写状态，即 readonly 设置成 false
+5. 把业务请求切到备库 B
+
+因为切换过程中 主库A 和备库 B 都是处于 readonly 状态，即系统处于不可用，所以第一步的 __尝试同步__ 要 SHM 尽量小。
