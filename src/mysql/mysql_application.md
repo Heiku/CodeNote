@@ -735,3 +735,106 @@ seconds_behind_master: 计算与当前系统时间的差值
 * 可用性优先策略：在延迟较大的时候能对外提供读写，但是在双M结构下，同步的时候会出现数据不一致的问题
 
 可以采用 binlog row 的方式，更容易发现数据不一致的问题
+
+
+#### 备库延时
+
+relay log -> coordinator(sql thread) -> workers... 
+
+coordinator 在分发需要满足两个基本要求：
+
+1. 不能造成更新覆盖。（这要求更新同一行的两个事务，必须被分发到同一个 worker 中）。
+2. 同一个事务不能被拆开，必须放到同一个 worker 中
+
+#### 主从问题
+
+##### 主备切换
+
+![](/img/mysql_master_slave_sync_sulotion.png)
+
+```
+A(下线)   BCD（备库 readonly）
+A`（切换）
+
+B 切换成 A` 的时候，执行 change master(host、port、user、password、binlog_name、binlog_pos)
+这里 A` 的 pos 同步位置的获取是通过 A` 把 relay log 完全同步后，通过 show master status 获取自身的最新 pos，
+但这个过程仍可能存在备库 BCD 已经同步的情况，即 pos 可能已经被失效，但 BCD 执行同步的时候还是从这个位置获取，
+所以需要注意的是如果是插入删除的情况会导致同步的时候报错，例如 `Duplicate entry `id` for primary key` 导致同步停止，
+可以手动 `set global sql_salve_skip_counter| salve skip_errors` 跳过报错继续执行同步
+```
+
+* GTID
+
+GTID: Global Transaction Identifier 全局事务ID，一个事务提交的时候生成，
+
+```
+GTID: server_uuid:gno
+
+server_uuid: server 实例启动时自生成，全局唯一的值
+gno: 提交事务的时候分配配的id，自增+1
+
+gno 区分 transaction_id，事务id如果回滚，事务id会递增，而gno只会在事务提交的时候分配
+```
+
+主备切换:
+
+```
+change master to
+... 
+master_auto_position=1  // 主备使用 GTID 协议,不需要指定 log_name & log_position
+
+上面的例子，如果这时候 A 的部分事务已经同步到了 B，那么A` 和 B 都会有相同的 GTID
+在 B 与主库 A` 建立连接的时候，会将自己的所有 GTID 集合发送给主库 A`，
+然后A`再将自身的 GTID 集合与之取差集，然后从不重复的事务开始取 pos 发送给 备库 B，
+从这个位置开始的都将不会重复。
+```
+
+#### 读写问题
+
+![](/img/mysql_master_slave_read_write_proxy.png)
+
+* 直连 vs proxy 优缺点：
+
+1. 客户端直连，少了 proxy 转发性能更好，架构简单，排查会比较方便。但因为后端部署细节，所以在
+主备切换、库迁移等操作客户端都会感知到，需要及时调整数据库连接信息。
+2. proxy 代理，客户端并不需要知道部署细节，连接维护、后端信息维护等工作都是由 proxy 完成，
+同时要求 proxy 要具备高可用架构，相对复杂。
+
+##### 过期读
+
+不管哪种方式，由于主从存在延迟，客户端执行一个更新事务后查询，如果查询选择的是从库，就有可能
+存在读取的记录是更新前的状态。
+
+* 强制走主库
+
+1. 对于那些更新后需要看到最新结果的请求，强制发到主库上。
+2. 对于可以读到旧数据的请求，例如发布商品信息后，买家会稍微晚几秒看到最新发布的商品，走从库
+
+* sleep
+
+主库更新后，读从库之前 sleep（1），需要客户端的配合去解决用户的体验问题，因为一般主从的延迟都是
+在1s 左右，但尽管这样，还是有可能会读取到过期的数据，毕竟不能严格控制延迟在1s内，
+
+#### 判断主备延迟
+
+获取主备延迟，如果延迟高则直接查主库，如果延迟低且在业务的可接受范围内，可以主动等待类似上面的 sleep
+但靠这种延迟的办法并不显示，延迟0并不表示完全同步（主库客户端已经提交，但从库还没确认）
+
+1. 通过 `show master slave`，判断 `seconds_behind_master`，精度较差
+2. 直接比对 binlog position
+
+```
+master_log_file master_log_position 主库的当前位置
+slave_log_file slave_log_position   从库的位置
+```
+
+3. 对比 GTID
+
+判断主备双方的 GTID 集合是否相同
+
+```
+auto_position = 1， 确保双方使用的是 GTID 协议
+retrived_gtid_set, 备库收到的日志 GTID 集合
+executed_gtid_set，备库已经执行完的 GTID 集合， 
+```
+
