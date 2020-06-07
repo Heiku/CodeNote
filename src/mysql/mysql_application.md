@@ -815,7 +815,7 @@ master_auto_position=1  // 主备使用 GTID 协议,不需要指定 log_name & l
 主库更新后，读从库之前 sleep（1），需要客户端的配合去解决用户的体验问题，因为一般主从的延迟都是
 在1s 左右，但尽管这样，还是有可能会读取到过期的数据，毕竟不能严格控制延迟在1s内，
 
-#### 判断主备延迟
+##### 判断主备延迟
 
 获取主备延迟，如果延迟高则直接查主库，如果延迟低且在业务的可接受范围内，可以主动等待类似上面的 sleep
 但靠这种延迟的办法并不显示，延迟0并不表示完全同步（主库客户端已经提交，但从库还没确认）
@@ -838,3 +838,78 @@ retrived_gtid_set, 备库收到的日志 GTID 集合
 executed_gtid_set，备库已经执行完的 GTID 集合， 
 ```
 
+##### semi-sync
+
+semi-sync 解决了事务提交后但还没传给从库的问题
+
+1. 事务提交的时候，主库b把 binlog 发给从库
+2. 从库收到 binlog 之后，发回给主库一个 ack，表示收到
+3. 主库收到 ack 之后，才能给客户端返回 “事务完成” 的确认
+
+semi + 断电判断在一主一备的场景是成立的，但在一主多从的场景中，因为 semi-sync 只要等到一个从库的 ack，
+就给客户端返回确认，但如果查询的时候不是这个返回 ack 的从库，就无法确保读到最新的数据，还是会过期读。
+
+##### 等主库位点
+
+```
+select master_pos_wait(file, pos[, timeout])
+
+从库执行，主动等待主库 file,pos N 秒，如果失败，返回 -1
+```
+
+GTID
+
+```
+select wait_for_executed_gtid_set(gtid_set, 1)
+
+主动等待，直到这个库执行的事务中包含传入的 gtid_set，返回0，超时为1
+```
+
+#### 数据库出问题
+
+并发连接：具体的客户端连接数，查询通过 `show processlist`
+并发查询：在事务中的实际查询数，`set global innodb_thread_concurrency = 128`
+
+#### 误删数据
+
+* 误删行
+
+delete 误删数据行，通过 Flashback 工具修改 binlog 内容，拿回原库重放。确保 `binlog_format=row` 
+和 `binlog_row_image=FULL`，在修改的时候，因为 row 格式记录数据行的修改事件，所以只需修改事件类型
+`Delete_rows event` 修改为 `Write_rows event`
+
+事前预防：代码 SQL 审计、`sql_safe_updates=on` 防止 delete 无条件删除
+
+* 误删表/库
+
+通过全量备份恢复
+
+1. 取最近一次全量备份，如果一天一备，取0点的记录
+2. 用备份的数据恢复临时库
+3. 从日志备份里取0点之后的日志
+4. 将除了误删除的语句全部应用到临时库上
+
+* rm
+
+通过 HA 系统恢复实例实例，通过 HA 系统自动上下线 MySQL 服务，保证可用
+
+
+#### kill
+
+kill 用于处理长时间等待其他事务中的锁的情况
+
+1. 将 session 状态改为 `THD:KILL_QUERY`
+2. 给 session 的执行线程发一个信号
+
+
+#### 查询内存占用
+
+取数据和发数据过程：（边读边发）
+
+1. 获取一行，写到 net_buffer 中，内存大小由参数 `net_buffer_length` 定义
+2. 重复获取行，直到 net_buffer 写满，调用网络接口发送出去
+3. 如果发送成功，则清空 net_buffer，继续读取下一行，写入 net_buffer
+4. 如果发送函数返回 EAGAIN 或 WSAEOULDBLOCK，就表示本地网络栈（socket send buffer）写满了，
+进入等待。直到网络栈重新可写，再继续发送。
+
+InnoDB 内部使用的是最近最少使用（Least Recently Used，LRU）算法，
