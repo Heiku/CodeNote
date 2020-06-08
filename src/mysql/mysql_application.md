@@ -912,4 +912,26 @@ kill 用于处理长时间等待其他事务中的锁的情况
 4. 如果发送函数返回 EAGAIN 或 WSAEOULDBLOCK，就表示本地网络栈（socket send buffer）写满了，
 进入等待。直到网络栈重新可写，再继续发送。
 
-InnoDB 内部使用的是最近最少使用（Least Recently Used，LRU）算法，
+InnoDB 内部使用的是最近最少使用（Least Recently Used，LRU）算法，按照 5:3 的比例将整个 LRU 链表分成了 
+young 区和 old 区。
+
+
+#### Join
+
+`select * from t1 join t2 on (t1.a = t2.a);` MySQL 优化器可能会选择 t1 或 t2 作为驱动表，可以使用 
+`t1 straight_join t2 on ...` 直接连接，固定驱动表和被驱动表。
+
+##### Index Nested-Loop Join（NLJ）
+
+1. 从表 t1 中读入一行数据 R
+2. 从数据行 R 中，取出字段 a 到表 t2 里面查
+3. 取出表 t2 中满足条件的行，和 R 组成一行，作为结果集的一部分
+4. 重复过程 1-3，直到表 t1 的末尾循环结束
+
+结论：小表驱动大表。(两个表按照各自的条件过滤，过滤完成之后，计算参与 join 的各个字段的总数据量，
+数据量小的那个表，就是“小表”，应该作为驱动表)。
+
+
+#### 临时表
+
+

@@ -6,6 +6,13 @@
 无论是同步块，同步方法都是对指定对象相关联的 monitor 的获取，这个过程是互斥的，即同一时刻只能有一个线程能够成功，
 其它失败的线程会被阻塞，并放入到同步队列中，进入 BLOCKED 状态。
 
+#### Java 对象头
+
+对象头：Mark Word(hashCode、gc age、lock record...) + Class Metadata Address 存储到对象类型数据的指针
+
+当对象状态为偏向锁时，Mark Word 存储的是偏向的 `线程ID` ；当状态为轻量级锁时，Mark Word 存储的是指向线程栈中 
+`Lock Record` 的指针；当状态为重量级锁时，Mark Word 为指向堆中的 `monitor` 对象的指针。
+
 #### monitor
 
 monitor 是线程私有的数据结构，每一个线程都有一个可用的 monitor 列表（为了同时锁住多个资源），同时还有一个全局可用列表，
