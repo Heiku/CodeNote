@@ -921,6 +921,8 @@ young 区和 old 区。
 `select * from t1 join t2 on (t1.a = t2.a);` MySQL 优化器可能会选择 t1 或 t2 作为驱动表，可以使用 
 `t1 straight_join t2 on ...` 直接连接，固定驱动表和被驱动表。
 
+left join：左边的表不一定是驱动表，
+
 ##### Index Nested-Loop Join（NLJ）
 
 1. 从表 t1 中读入一行数据 R
@@ -1011,3 +1013,45 @@ Memory 引擎使用的是 hash 结构的存储方式, hash(id) -> 数据行，�
 * 持久化问题
 
 数据存放再内存中，虽然会访问速度快，但断电时数据会丢失。再主从架构下，会造成主从的数据不一致等问题。
+
+
+#### 拷贝数据
+
+create table t1 like t;
+insert... select;   会对源表加读锁，原表访问性能下降
+
+1. mysqldump
+
+将数据到处成为一组 INSERT 语句，然后再执行 
+
+```
+mysqldump -h$host -P$port -u$user --add-locks=0 --no-create-info --single-transaction  --set-gtid-purged=OFF db1 t --where="a>900" --result-file=/client_tmp/t.sql
+```
+
+2. 导出 csv 文件
+
+```
+select * from db1.t where a>900 into outfile '/server_tmp/t.csv';
+
+load data infile '/server_tmp/t.csv' into table db2.t;
+```
+
+3. 物理拷贝方法
+
+```
+t -> r
+
+create table r like t，创建一个相同表结构的空表
+alter table r discard tablespace，这时候 r.ibd 文件会被删除
+flush table t for export，这时候 db1 目录下会生成一个 t.cfg 文件
+在 db1 目录下执行 cp t.cfg r.cfg; cp t.ibd r.ibd
+unlock tables，这时候 t.cfg 文件会被删除
+alter table r import tablespace，将这个 r.ibd 文件作为表 r 的新的表空间，由于这个文件的数据内容和 t.ibd 是相同的，
+所以表 r 中就有了和表 t 相同的数据
+```
+
+* 恢复速度最快，但必须是全表拷贝，不能只拷贝部分数据
+* 需要到服务器上拷贝数据，一般只有 DBA 才有权限完成
+* 通过拷贝物理文件实现，源表和目标表得都是 InnoDB 才能使用
+
+

@@ -121,4 +121,24 @@ multi/exec/discard: 所有指令在 exec 之前不执行，而是缓存在服务
 watch 会在事务开始之前关注1或多个变量，当事务执行后，即服务器收到 exec 指令执行缓存的事务队列的时候，如果被 watch 
 的变量被修改了，exec 会返回事务失败。
 
+
+#### SDS
+
+Redis 字符串本质上就是一个字符数组，C 语言中的字符串是以 NULL 结尾的，`strlen()` 统计字符串长度的时候
+采用遍历的方式计算，O(n)。 
+
+```
+struct SDS<T> {
+    T capacity;     // 总容量
+    T len;          // 长度
+    byte flag;      // 特殊标记位
+    byte[] content; // 数组
+}
+```
+
+类似于 `ArrayList`，通过预分配冗余空间的方式，防止在字符串频繁变动的情况下，造成系统频繁地重新分配内存空间，
+复制字符串数组的动作，减少了内存分配和复制带来的系统开销。
+
+![](/img/redis-sds-struct.png)
+
 [redis-interview-collect](https://mp.weixin.qq.com/s/-y1zvqWEJ3Tt4h39Z0WBJg)
