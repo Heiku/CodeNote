@@ -141,4 +141,22 @@ struct SDS<T> {
 
 ![](/img/redis-sds-struct.png)
 
+
+```
+redisObject {
+    int4 type;
+    int4 encoding;
+    int24 lru;
+    int32 refCount;
+    void *ptr;
+}
+```
+
+* embstr vs raw
+
+embstr: 调用1次 `malloc`，redisObject 与 sds 内存上是连续的，embstr 整体上 64 byte，刚好和cpu cache line 一样，可以更好使用
+内存。    
+raw: 调用2次 `malloc`, redisObject 与 sds 内存上不连续
+
+
 [redis-interview-collect](https://mp.weixin.qq.com/s/-y1zvqWEJ3Tt4h39Z0WBJg)
