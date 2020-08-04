@@ -50,11 +50,6 @@ public class ThreadLocalDemo {
 
 
     static class Counter {
-        private static ThreadLocal<StringBuilder> counter = new ThreadLocal<StringBuilder>() {
-            @Override
-            protected StringBuilder initialValue() {
-                return new StringBuilder();
-            }
-        };
+        private static ThreadLocal<StringBuilder> counter = ThreadLocal.withInitial(StringBuilder::new);
     }
 }

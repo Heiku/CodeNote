@@ -20,7 +20,6 @@ public class JDKHandler implements InvocationHandler {
         System.out.println("before invoke");
         method.invoke(object, args);
         System.out.println("after invoke");
-
         return null;
     }
 }

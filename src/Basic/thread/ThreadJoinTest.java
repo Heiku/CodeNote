@@ -26,13 +26,12 @@ public class ThreadJoinTest {
                 // 这样 main线程就可以继续执行
                 // 原则：谁运行 t.join() 就阻塞谁
                 t.join();
-            }catch (InterruptedException e){
+            } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-
-            System.out.println("主线程执行完毕");
-            System.out.println("~~~~~~~~~~~~");
         }
+        System.out.println("主线程执行完毕");
+        System.out.println("~~~~~~~~~~~~");
     }
 
 
