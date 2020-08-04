@@ -1,6 +1,6 @@
 Note Java Knowledge Every Day
 
-[base](/src/Basic/asm/base.md)  
+[base](/Basic/base/base.md)  
 [jvm](/src/Basic/jvm/jvm.md)  
 [gc](/src/Basic/jvm/gc.md)  
 [atomic](/src/Basic/cpu/atomic.md)  
