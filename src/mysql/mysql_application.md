@@ -33,6 +33,22 @@ prepare -> binlog -> commit
 如果在 commit 时失败，因为 redo log 和 bin log 的数据一致，所以可以直接自动提交。
 
 
+##### 为什么需要 redo log？
+
+InnoDb 是以页来管理存储空间，在访问页面之前，我们需要将把在磁盘上的页缓存到内存中的 `buffer pool` 中才可以访问，
+在事务中，为了保证持久性，对于一个已提交的事务，在事务提交后即使系统发生了崩溃，事务对数据库所作的更改也不能丢失。
+简单的做法就是：__在事务提交完成之前把该事务所修改的所有页面刷新到磁盘上__，但存在以下两个问题：
+
+* 刷新一个完整的数据页太浪费了
+
+有时候我们只是修改了某个页面中的一个字节，但是 InnoDb 是以 `页` 为单位来进行磁盘IO，也就是说事务提交的时候，
+不得不将一个完整的页面从内存中刷新到磁盘，如果只修改一字节而刷新16K的数据页太浪费了。
+
+* 随机IO效率低
+
+一个事务中可能包含多个语句，会修改多个页面，而页面与页面之间并不相邻，意味着将某个事务修改的 `buffer pool` 中
+的页面刷新到磁盘时，需要进行很多随机IO，随机IO比顺序IO慢很多。
+
 #### 事务
 
 * 读未提交：一个事务还没有提交时，它做的变更就能被其他事务看到
@@ -40,6 +56,22 @@ prepare -> binlog -> commit
 * 可重复读：一个事务执行中看到的数据总是和事务一开始看到的数据是一致的
 * 串行化：对同一行记录，写回加写锁，读会加读锁，当出现读写锁冲突的时候，后面访问的事务必须等前一个事务执行完成，
 才能继续执行
+
+##### 事务状态
+
+* 活动的(active): 事务对应数据库正在执行的过程
+
+* 部分提交(partially committed): 事务最后一个操作执行完成，但操作都在内存中，所造成的影响并没有刷新到磁盘上
+
+* 失败(failed): 当事务处于 `活动的` 或者 `部分提交的`，可能遇到了某些错误（数据库自身的错误、操作系统错误或断电等）
+导致无法继续执行，或者认为的停止当前事务的执行
+
+* 中止(aborted): 如果事务执行了半截变成 `失败的` 状态，就需要撤销失败事务对当前数据库的影响，这个撤销的过程称为 `回滚`。
+当 `回滚` 操作执行完毕时，也就是数据库恢复到执行事务之前的状态，我们称事务处于 `中止` 状态。
+
+* 提交(committed): 当一个事务处于 `部分提交的` 状态的事务将修改过的数据同步到磁盘上
+
+![](/img/mysql_transaction_status.png)
 
 如果开启事务之后，Mysql 会对行记录维护回滚段，比如（B = B + 1, 那么将会维护 B - 1 的回滚段），在长事务中，可能会存在
 很老的事务视图，因为当前事务有可能随时访问数据库的任意数据，在事务提交之前，数据库里它可能用到的回滚记录都必须保留，
@@ -60,7 +92,7 @@ InnoDB 在实现 MVCC 时用到了 一致性读视图，即 Consistent read view
 隔离级别的实现。
 
 ```
-begin/start transaction 并不是一个事务的起点，而是执行的第一条语句（select/update/....）
+begin/start transaction（start transaction READ ONLY /  READ WRITE 指定读写事务） 并不是一个事务的起点，而是执行的第一条语句（select/update/....）
 
 start transaction with consistent snapshot  可以马上启动一一个事务
 ```
@@ -575,6 +607,13 @@ write/fsync 的时机由参数 sync_binlog 控制：
 
 ##### redo log 写入机制
 
+* lsn
+
+当有新的 `redo` 日志写入到 `log buffer` 时，首先 `lsn` 的值会增长，但 `flushed_to_disk_lsn` 不变，随后随着不断有 
+`log_buffer` 中的日志被刷新到磁盘上，`flushed_to_disk_lsn` 的值也会跟着增长。如果两者的值相同，说明 `log buffer` 
+中的所有 redo 日志已经刷新到磁盘中（未fsync）。同时还有一个 `checkpoint_lsn` 是为了循环使用 redo 日志，在 `checkpoint_lsn` 
+之前的日志都可以被覆盖，因为已经刷新到磁盘中。
+
 在事务执行的过程中，生成的 redo log 要先写到 redo log buffer 中，所以redo log 在写入的过程中，可能存在以下几种
 状态：
 
@@ -586,9 +625,9 @@ write/fsync 的时机由参数 sync_binlog 控制：
 
 redo log 的写入策略由参数 `innodb_flush_log_at_trx_commit` 参数控制
 
-1. 0: 事务提交的时候只是把 redo log 留在 redo log buffer 中
-2. 1: 事务提交的时候都将 redo log 持久化到磁盘上
-3. 2: 事务提交的时候把 redo log 写到 page cache 上
+1. 0: 事务提交的时候只是把 redo log 留在 redo log buffer 中，交由后台线程写入磁盘
+2. 1: 事务提交的时候都将 redo log 持久化到磁盘上，可以保证事务的 `持久性`
+3. 2: 事务提交的时候把 redo log 写到 page cache 上，交由操作系统决定写盘
 
 InnoDB 有一个后台线程，每隔1s，把 redo log buffer 中的日志调用 write 写到文件系统的 page cache，
 然后调用 fsync 持久到磁盘上。（因为后台会不定期写到磁盘，所以没提交的事务的 redo log 也可能被持久化
@@ -596,6 +635,11 @@ InnoDB 有一个后台线程，每隔1s，把 redo log buffer 中的日志调用
 
 "双1"配置：`sync_binlog` 和 `innodb_flush_log_at_trx_commit` 都设置成1，一个事务完整提交前，
 需要等待两次刷盘，一次 redo log，一次 binlog。
+
+##### redo log 恢复数据
+
+
+
 
 ##### LSN
 
