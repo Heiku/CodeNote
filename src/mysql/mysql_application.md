@@ -121,6 +121,22 @@ InnoDb 为每个事务构造了一个数组，用来保存这个事务启动瞬�
 3. 如果落在黄色的部分，包括两种情况：
     a. 若 row trx_id 在数组中，表示这个版本是还没提交的事务生成的，不可见
     b. 若 row trx_id 不在数组中，表示这个版本是已经提交了的事务生成的，可见
+    
+
+##### ReadView
+
+每条记录在更新之后，都会将旧值放到 `undo 日志` 中，作为该记录的一个旧版本（事务提交移除），随着更新的次数增多，所有
+的版本都会被行记录的 `roll_pointer` 属性连接成一个链表，称为 `版本链`，版本链的头节点就是当前记录的最新值。另外，每个版本
+还包含生成该版本的 `事务id`。
+
+![](/img/mysql-mvcc-readview-undo-record-list.png)
+
+`READ_COMMITED`、`REPEATABLE READ` 这两个隔离级别的很大不同在于：生成 `ReadView` 的时机不同，`READ_COMMITED` 在每一次
+进行普通 select 操作前都会生成一个 ReadView，而 `REAPETABLE_READ` 只在一次进行普通 select 操作前生成一个 ReadView，
+之后的查询操作都重复使用这个 ReadView。
+
+为了支持MVCC，对于delete mark操作来说，仅仅是在记录上打一个删除标记，并没有真正将它删除掉  
+
 
 ### 锁
 
