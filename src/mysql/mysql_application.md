@@ -264,7 +264,7 @@ change buffer 持久化文件为 idbdata1.
 #### Mysql 选错索引
 
 ```
-analyze table t;    重新痛惜索引信息（索引基数）
+analyze table t;    重新分析索引信息（索引基数）
 
 select * from table force(a) where a between 100 and 200    索引修正
 ```
@@ -272,8 +272,8 @@ select * from table force(a) where a between 100 and 200    索引修正
 
 #### 字符串索引
 
-前缀索引: alter table T add index(email(6))，可以减少索引占用的空间，但是可能会存在多条记录回表，精确度不够。
-倒叙索引：select a from T where a = reverse('')
+前缀索引: alter table T add index(email(6))，可以减少索引占用的空间，但是可能会存在多条记录回表，精确度不够。  
+倒叙索引：select a from T where a = reverse('')  
 hash索引：alter table t add id_card_crc int unsigned, add index(id_card_crc);  精确度高，但需要额外空间存储 hash 值，
 同时计算的过程中会消耗更多的 CPU。
 
@@ -323,7 +323,7 @@ innodb_file_per_table
 
 区分一下：  
 1. alter table T engine = InnoDB: 重建表，减少页空间的浪费
-2. analyze table T: 对表的索引信息进行重新统计（用于处理索引数据错误的文图），并不修改数据，加 MDL 读锁
+2. analyze table T: 对表的索引信息进行重新统计（用于处理索引数据错误的情况），并不修改数据，加 MDL 读锁
 3. optimize table: recreate + analyze
 
 
@@ -340,7 +340,7 @@ InnoDb 的优化：
 区分：  
 1. count(id): 遍历主键表，然后取id，返回给 server 层，server判断如果不为空+1
 2. count(1): 遍历整张表，但不取值，server放入数字”1“，判断不为空之后，进行累加，
-相比于count(id)不解析数据行，草被字段值，更快一些
+相比于count(id)不解析数据行，不读取字段值，更快一些
 3. count(字段): 类似 count(id)，取出每一行的字段，然后判断是否为空，不为空+1
 4. count(*): 额外优化，不取字段，只计算数据行，挑占用空间更少的索引树进行计算。
 
@@ -595,7 +595,7 @@ select * from t where c>=10 and c<11 for update;
 
 3. Mysql 选错了索引
 
-mysql 自己选错了索引，可以analy以下，如果没有效果，可以强制使用 force index。最好是上线前进行测试：  
+mysql 自己选错了索引，可以analyze以下，如果没有效果，可以强制使用 force index。最好是上线前进行测试：  
 打开慢日志，并设置 long_query_time = 0，确保每个语句都会被记录，然后插入模拟数据进行回归测试，
 观察每个语句的 rows_examined 是否与预期一致。
 
