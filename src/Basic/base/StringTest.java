@@ -6,29 +6,29 @@ package Basic.base;
  */
 public class StringTest {
     public static void main(String[] args) {
-        //          0: ldc           #2                  // String hello
-        //         2: astore_1
-        //         3: ldc           #3                  // String world
-        //         5: astore_2
-        //         6: new           #4                  // class java/lang/String
-        //         9: dup
-        //        10: ldc           #5                  // String bad girl
-        //        12: invokespecial #6                  // Method java/lang/String."<init>":(Ljava/lang/String;)V
-        //        15: astore_3
-        //        16: new           #7                  // class java/lang/StringBuilder
-        //        19: dup
-        //        20: invokespecial #8                  // Method java/lang/StringBuilder."<init>":()V
-        //        23: aload_1
-        //        24: invokevirtual #9                  // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
-        //        27: aload_2
-        //        28: invokevirtual #9                  // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
-        //        31: invokevirtual #10                 // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
-        //        34: astore        4
-        String a = "hello";
-        String b = "world";
-        String d = "bad girl";
+        final String a = "hello";
+        // StringTable("hello" -> string)
+        String b = "hello";
+        // 直接引用 string
+        String result = "hello2";
+        // StringTable("hello" -> string, "hello2" -> string)
 
-        // in compiling, compiler will translate " + " to StringBuilder for connecting two string
-        String hello = a + b;
+        String c = a + 2;
+        // 这里 c 会经过编译器优化，直接找到 result 对应的引用，赋值给 局部变量表中 c
+        String d = b + 2;
+        // 而这里是采用 StringBuilder#append，最后通过 toString() 得到一个新的 string
+
+
+        /**
+         * 编译器结果： 建议采用 javap 查看
+         *
+         * String a = "hello";
+         *         String b = "hello";
+         *         String result = "hello2";
+         *         String c = "hello2";
+         *         String d = b + 2;
+         */
+
+        // a.intern() 返回第一个 stringTable 中第一个的引用
     }
 }
