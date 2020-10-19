@@ -30,12 +30,13 @@ public class RemoveList {
 
             // nothing happen
             // same with list.remove(s). when loop once, delete first element, this time cursor = size, so break iterator
-            if (s.equals("Hello")){
+            // hasNext() ask cursor != size, but current cursor = size, so break iterator, skip next() check modCount == expectModCount
+            if (s.equals("Hello")) {
                 list.remove(s);
             }
 
-            // nothing happen too
-            // list.remove(s);
+            // hasNext()
+            // next()
         }
         System.out.println(list.size());
     }

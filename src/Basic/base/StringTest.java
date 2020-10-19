@@ -29,6 +29,8 @@ public class StringTest {
          *         String d = b + 2;
          */
 
-        // a.intern() 返回第一个 stringTable 中第一个的引用
+        // a.intern() 返回第一个 stringTable 中第一个的引用\
+
+
     }
 }
