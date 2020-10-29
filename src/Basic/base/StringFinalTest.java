@@ -1,6 +1,8 @@
 package Basic.base;
 
 /**
+ * https://juejin.im/post/6844904191324864520
+ *
  * @Author: Heiku
  * @Date: 2020/10/28
  */
@@ -19,5 +21,21 @@ public class StringFinalTest {
         System.out.println(s1 == s3);
         System.out.println(s2 == s3);
 
+        // 这里会构建 stringBuilder + 2个new String + 字符常量池中的"1" 4个对象
+        // 然后通过 new String(arr, offset, count), 注意 这里没有构建 "11" 并放入到字符串常量池中 (第5个对象)
+        // 然后 intern() 将 string(“11”) 构建放入到常量池中 "11" 并指向 string("11")
+        // 最后 s5 = "11" 根据 stringTable 复制 string("11") 的引用
+        // 所以 s4 = s5
+        String s4 = "1" + "1";
+        s4.intern();
+        String s5 = "11";
+        System.out.println(s4 == s5);
+
+        // 注意，StringBuilder.toString() 是通过 new String(arr, offset, count) 而不是 new String(String..)
+        char[] arr = new char[]{'1', '1'};
+        String s6 = new String(arr, 0, arr.length);
+        s6.intern();
+        String s7 = "11";
+        System.out.println(s6 == s7);
     }
 }
