@@ -29,4 +29,4 @@ Note Java Knowledge Every Day
 
 [tcp/ip](/src/tcpip/tcpip.md)  
 
-[distributed](/src/distributed/distributed_base.md)
+[distributed](/src/distributed/distributed_base.md)e
