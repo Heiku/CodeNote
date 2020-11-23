@@ -4,6 +4,8 @@
 DML(Data manipulation language): select、insert、update、delete  
 DDL(Data definition language): create、alter、delete
 
+
+
 ### Log
 
 #### WAL
@@ -12,6 +14,8 @@ WAL（Write-Ahead Logging）：先写日志再写磁盘。
 
 当一条记录需要更新时，InnoDB（独有） 会先把记录写到 redo log 中，并更新内存，等到系统空闲得时候，再将这个操作同步到磁盘中。
 保证了数据库得 Crash Safe（在系统崩溃重启之后，能根据 redo日志进行回放，保持原来的状态）。
+
+
 
 #### bin log & redo log
 
@@ -33,6 +37,8 @@ prepare -> binlog -> commit
 如果在 commit 时失败，因为 redo log 和 bin log 的数据一致，所以可以直接自动提交。
 
 
+
+
 ##### 为什么需要 redo log？
 
 InnoDb 是以页来管理存储空间，在访问页面之前，我们需要将把在磁盘上的页缓存到内存中的 `buffer pool` 中才可以访问，
@@ -49,13 +55,20 @@ InnoDb 是以页来管理存储空间，在访问页面之前，我们需要将�
 一个事务中可能包含多个语句，会修改多个页面，而页面与页面之间并不相邻，意味着将某个事务修改的 `buffer pool` 中
 的页面刷新到磁盘时，需要进行很多随机IO，随机IO比顺序IO慢很多。
 
+
+
 #### 事务
 
 * 读未提交：一个事务还没有提交时，它做的变更就能被其他事务看到
+
 * 读提交：一个事务提交之后，它做的变更才会被其他事务看到
+
 * 可重复读：一个事务执行中看到的数据总是和事务一开始看到的数据是一致的
+
 * 串行化：对同一行记录，写回加写锁，读会加读锁，当出现读写锁冲突的时候，后面访问的事务必须等前一个事务执行完成，
-才能继续执行
+  才能继续执行
+
+  
 
 ##### 事务状态
 
@@ -71,11 +84,15 @@ InnoDb 是以页来管理存储空间，在访问页面之前，我们需要将�
 
 * 提交(committed): 当一个事务处于 `部分提交的` 状态的事务将修改过的数据同步到磁盘上
 
+  
+
 ![](/img/mysql_transaction_status.png)
 
 如果开启事务之后，Mysql 会对行记录维护回滚段，比如（B = B + 1, 那么将会维护 B - 1 的回滚段），在长事务中，可能会存在
 很老的事务视图，因为当前事务有可能随时访问数据库的任意数据，在事务提交之前，数据库里它可能用到的回滚记录都必须保留，
 这就导致占用大量存储空间。
+
+
 
 ```
 set autocommit = 0，意味着不会自动提交事务，除非自己 commit 或者 rollback，导致长事务
@@ -86,16 +103,22 @@ set autocommit = 0，意味着不会自动提交事务，除非自己 commit 或
 select * from information_schema.innodb_trx where TIME_TO_SEC(timediff(now(),trx_started))>60
 ```
 
+
+
 事务开始：事务开始的时候，会启动一个视图 read-view。
 
 InnoDB 在实现 MVCC 时用到了 一致性读视图，即 Consistent read view，用于支持 RC(Read Committed)和 RR(Repeatable Read)
 隔离级别的实现。
+
+
 
 ```
 begin/start transaction（start transaction READ ONLY /  READ WRITE 指定读写事务） 并不是一个事务的起点，而是执行的第一条语句（select/update/....）
 
 start transaction with consistent snapshot  可以马上启动一一个事务
 ```
+
+
 
 InnoDb 里面每个事务都会有一个唯一的事务id，transaction id。在事务开始的时候向 InnoDb 的事务系统申请的，按申请顺序严格递增的。
 
@@ -105,6 +128,8 @@ InnoDb 里面每个事务都会有一个唯一的事务id，transaction id。在
 ![](/img/mysql-transaction-snaphot.png)
 
 undo log 根据图中的 U3 U2 U1 计算。
+
+
 
 ##### 事务视图
 
@@ -117,10 +142,13 @@ InnoDb 为每个事务构造了一个数组，用来保存这个事务启动瞬�
 对于事务启动瞬间，一个数据版本的 row trx_id 有以下几种可能：
 
 1. 如果落在绿色部分，表示这个版本是已提交的事务或者是当前事务自己生成的，数据可见。
+
 2. 如果落在红色部分，表示这个版本是将来启动的事务生成的，不可见。
+
 3. 如果落在黄色的部分，包括两种情况：
     a. 若 row trx_id 在数组中，表示这个版本是还没提交的事务生成的，不可见
     b. 若 row trx_id 不在数组中，表示这个版本是已经提交了的事务生成的，可见
+    
     
 
 ##### ReadView
@@ -138,7 +166,10 @@ InnoDb 为每个事务构造了一个数组，用来保存这个事务启动瞬�
 为了支持MVCC，对于delete mark操作来说，仅仅是在记录上打一个删除标记，并没有真正将它删除掉  
 
 
+
 ### 锁
+
+
 
 ##### 全局锁
 
@@ -157,8 +188,11 @@ MDL 保证了在 __表结构__ 被修改的时候，读写的正确性。当对�
 加 MDL 写锁。
 
 * 读锁之间不互斥，因此可以有多个线程同时对一张表增删改查
+
 * 读写锁、写锁之间是互斥的，用来保证变更结构操作的安全性。因此如果有两个线程要同时对同一个表加字段，其中一个要等到
-另一个执行完才能开始执行。
+  另一个执行完才能开始执行。
+
+  
 
 ```
 sessionA select  读锁
@@ -171,6 +205,8 @@ sessionD select  加读锁失败，必须等待写锁释放
 可以采用加上超时时间得方式尝试添加字段
 alter table T wait/nowait add column
 ```
+
+
 
 ###### 行锁
 
@@ -187,6 +223,8 @@ B事务的 update 会被阻塞，直到事务 A 执行 commit 之后才会释放
 
 在 InnoDB 事务中，行锁是需要的时候才加上的，但并不是不需要了就立刻释放，而是等到事务结束时才释放。__所以在事务中，
 如果事务中需要锁住多个行，要把可能造成锁冲突、最可能影响并发度的锁往后放__。
+
+
 
 ###### 死锁
 
@@ -217,6 +255,8 @@ delete 1w
 3. 20个连接 limit                  // 自己制造锁竞争，并发量下降
 ```
 
+
+
 ### 索引
 
 #### 普通索引 和 唯一索引
@@ -225,6 +265,8 @@ delete 1w
 
 * 普通索引：查找到满足 c=5 之后，还是会继续查找直到碰到第一个不满足 c=5 的记录
 * 唯一索引：查找到第一个满足条件的记录之后，停止检索
+
+
 
 ##### change buffer
 
@@ -237,7 +279,10 @@ __将数据页读入内存，再执行 change buffer 中与这个页有关的操
 
 当需要更新的数据页不在内存的时候：
 * 唯一索引：需要直接直接加载数据页到内存上，判断是否已有相同的记录，没冲突再插入
+
 * 普通索引：并不关心是否重复，将更新记录到 change buffer 上。减少了磁盘 I/O 带来的随机访问。
+
+  
 
 ##### change buffer 使用场景
 
@@ -263,6 +308,8 @@ change buffer 持久化文件为 idbdata1.
 
 redo log 主要节省的是随机写磁盘的 IO 消耗（转成顺序写），而 change buffer 主要节省的则是随机读磁盘的 IO 消耗
 
+
+
 #### Mysql 选错索引
 
 ```
@@ -272,12 +319,14 @@ select * from table force(a) where a between 100 and 200    索引修正
 ```
 
 
+
 #### 字符串索引
 
 前缀索引: alter table T add index(email(6))，可以减少索引占用的空间，但是可能会存在多条记录回表，精确度不够。  
 倒叙索引：select a from T where a = reverse('')  
 hash索引：alter table t add id_card_crc int unsigned, add index(id_card_crc);  精确度高，但需要额外空间存储 hash 值，
 同时计算的过程中会消耗更多的 CPU。
+
 
 
 #### 抖动
@@ -306,6 +355,8 @@ select VARIABLE_VALUE into @b from global_status where VARIABLE_NAME = 'Innodb_b
 select @a/@b;
 ```
 
+
+
 #### 数据删除，表文件不变
 
 innodb_file_per_table
@@ -327,6 +378,7 @@ innodb_file_per_table
 1. alter table T engine = InnoDB: 重建表，减少页空间的浪费
 2. analyze table T: 对表的索引信息进行重新统计（用于处理索引数据错误的情况），并不修改数据，加 MDL 读锁
 3. optimize table: recreate + analyze
+
 
 
 #### count(*)
@@ -351,12 +403,28 @@ count(字段) < count(id) < count(1) <= count(*)
 count(字段) <= count(id)，是因为如果该字段没建立索引，那么就有直接走主键索引，解析得是数据量比较大。
 而 count(id) 会优先选取数据量小得索引进行计数。
 
+
+
 #### 日志索引问题
 
 ![](/img/mysql-innodb-redo-log-bin-log-process.png)
 
+* 过程 (update t set a = a + 1)
+  
+    1. 先记录 undo log a (依托于 redo log)
+    2. 修改对应页得数据行 (等待系统刷盘)
+    3. 然后记录对应页上的修改到 redo log (我们熟知的 redo log 概念，移动 lsn balabala...)，进入 __PREPARE__ 状态
+    4. 接着写下逻辑日志到 bin log (记录数据库中的变化，用于同步(注意区分一下索引数据文件))，这期间都有可能因为其他事务提交使得 redo log/bin log 都 `fsync` 写入磁盘文件中
+    5. `commit` 的时候（双一配置, `innodb_flush_log_at_trx_commit` `sync_binlog` ）将两个修改完的处于 `pageCache` （maybe）中的日志数据写入到磁盘中，进入 `COMMIT` 状态
+    
+
+
+
+##### 分析
+
 如果在 redo log 写入后失败，那么系统恢复之后进行事务回滚。  
 如果在 bin log 写入后，在 commit 之前失败，那么会有以下情况：  
+
 1. 如果 redo log 中事务完整（commit），那么直接提交
 2. 如果 redo log 中只有 prepare，则判断对应事务 binlog 是否存在并完整：如果bin log 完整提交，不完整则回滚。
 
@@ -378,6 +446,8 @@ statement 格式中bin log有 COMMIT，row 格式中，最后有 XID event
 反之，也不能只用 redo log，因为本身时循环日志写，历史日志无法保留，无法起到归档的作用。同时Mysql server 层的
 主从同步复制主要还是通过 bin log 实现。
 
+
+
 #### Order
 
 Order By 通常是使用索引得到的数据后回表查找select 对应的数据行，然后再内存中 sort_buffer 中进行快速排序，
@@ -389,6 +459,8 @@ Order By 通常是使用索引得到的数据后回表查找select 对应的数�
 整个过程多一次回表。
 
 可以利用 联合索引 本身有序的方式减少排序带来的性能消耗。(city-name)
+
+
 
 #### SQL 性能差异
 
@@ -414,9 +486,13 @@ select * from table T where CAST(traid as signed int) = 2;
 select * from trade_detail where CONVERT(traideid USING utf8mb4)=$L2.tradeid.value;
 ```
 
+
+
 #### join
 
 优化器会自动选择 __小表驱动大表__，减少复杂度和磁盘IO
+
+
 
 #### 查询一行时间长
 
@@ -468,6 +544,8 @@ lock in share mode，为当前读，所以可以直接读到执行后的结果 1
 select * from; 快照读，所以需要从 1000001 开始，依次执行 undo log，才返回事务开始的数据 1。
 ```
 
+
+
 #### 幻读
 
 ```
@@ -489,6 +567,7 @@ select 语句执行完成之后，会在这一行加一个写锁，由于两段�
 间隙锁和行锁合称为 next-key lock，每个 next-key lock 都是前开后闭区间。(-∞,0],(0,5]...  
 间隙锁的引入，可能会导致同样的语句锁住更大的范围，影响了并发度，避免可以采用读提交的隔离界别，但需要把
 binlog 格式设置成 row，避免数据与日志不一致的情况。
+
 
 
 #### 改一行，锁多行
@@ -574,6 +653,8 @@ select * from t where c>=10 and c<11 for update;
 
 非唯一索引，不退化成行锁，所以锁住的范围为 (5,10],(10,15]，
 
+
+
 #### 性能提升
 
 * 短连接
@@ -605,6 +686,7 @@ mysql 自己选错了索引，可以analyze以下，如果没有效果，可以�
 观察每个语句的 rows_examined 是否与预期一致。
 
 
+
 #### 如何保证数据不丢失
 
 ##### binlog 写入机制
@@ -625,6 +707,8 @@ write/fsync 的时机由参数 sync_binlog 控制：
 2. sync_binlog = 1，每次提交事务都会 fsync
 3. sync_binlog = N(N > 1)，表示每次提交事务都 write，但累积 N 个事务后才 fsync。能提升性能，但存在数据丢失问题。
 （100-1000）
+
+
 
 ##### redo log 写入机制
 
@@ -657,9 +741,9 @@ InnoDB 有一个后台线程，每隔1s，把 redo log buffer 中的日志调用
 "双1"配置：`sync_binlog` 和 `innodb_flush_log_at_trx_commit` 都设置成1，一个事务完整提交前，
 需要等待两次刷盘，一次 redo log，一次 binlog。
 
+
+
 ##### redo log 恢复数据
-
-
 
 
 ##### LSN
@@ -684,6 +768,7 @@ group commit: 为了提升刷盘的吞吐量，在并发的多个事务中，多
 3. `innodb_flush_log_at_trx_commit` 设置为2，断电丢数据
 
 
+
 #### 主备一致
 
 * 事务日志同步过程(A -> B)
@@ -694,6 +779,7 @@ group commit: 为了提升刷盘的吞吐量，在并发的多个事务中，多
 3. 主库A 校验完连接信息后，按照备库B 传过来的位置，开始读取本地 binlog，发给B
 4. 备库B 拿到 binlog 后，写道本地文件，称为中转日志（relay log）
 5. sql_thread 读取中转日志，解析日志中的命令，并执行。
+
 
 
 ##### binlog 格式
@@ -744,6 +830,8 @@ mysqlbinlog master.000001 --start-position=2738 --stop-position=2973 | mysql -h1
 （解析 binlog 中position 2738-2973 的记录，然后放到 Mysql 中执行）
 ```
 
+
+
 #### 保证高可用
 
 备库最好设置成 `readonly` 只读模式：
@@ -751,6 +839,8 @@ mysqlbinlog master.000001 --start-position=2738 --stop-position=2973 | mysql -h1
 1. 防止特殊的运营查询需求影响到备库的数据，防止误操作
 2. 防止切换逻辑 BUG，例如切换过程中的双写，造成主备不一致
 3. 利用 readonly 状态判断节点的角色
+
+
 
 ##### 主备延迟
 
@@ -772,6 +862,8 @@ seconds_behind_master: 计算与当前系统时间的差值
 正常网络情况下，日志传输到备库的时间很短（T2-T1），主要体现在备库消费中转日志（relay log）的速度，
 比主库生产 binlog 的速度更慢。
 
+
+
 ##### 主备延迟来源
 
 1. 在部署的时候，备库所在的机器 __性能__ 远比主库的机器性能差
@@ -784,6 +876,8 @@ seconds_behind_master: 计算与当前系统时间的差值
 
 如果一个语句在主从执行10分钟，那么从库将会延迟10分钟，例如一次 delete 大量数据，可以分为多次事务删除。  
 除此之外，还有大表的 DDL。
+
+
 
 ##### 可靠优先策略（HA 系统的处理）
 
@@ -802,6 +896,7 @@ seconds_behind_master: 计算与当前系统时间的差值
 可以采用 binlog row 的方式，更容易发现数据不一致的问题
 
 
+
 #### 备库延时
 
 relay log -> coordinator(sql thread) -> workers... 
@@ -810,6 +905,8 @@ coordinator 在分发需要满足两个基本要求：
 
 1. 不能造成更新覆盖。（这要求更新同一行的两个事务，必须被分发到同一个 worker 中）。
 2. 同一个事务不能被拆开，必须放到同一个 worker 中
+
+
 
 #### 主从问题
 
@@ -854,6 +951,8 @@ master_auto_position=1  // 主备使用 GTID 协议,不需要指定 log_name & l
 从这个位置开始的都将不会重复。
 ```
 
+
+
 #### 读写问题
 
 ![](/img/mysql_master_slave_read_write_proxy.png)
@@ -864,6 +963,8 @@ master_auto_position=1  // 主备使用 GTID 协议,不需要指定 log_name & l
 主备切换、库迁移等操作客户端都会感知到，需要及时调整数据库连接信息。
 2. proxy 代理，客户端并不需要知道部署细节，连接维护、后端信息维护等工作都是由 proxy 完成，
 同时要求 proxy 要具备高可用架构，相对复杂。
+
+
 
 ##### 过期读
 
@@ -879,6 +980,8 @@ master_auto_position=1  // 主备使用 GTID 协议,不需要指定 log_name & l
 
 主库更新后，读从库之前 sleep（1），需要客户端的配合去解决用户的体验问题，因为一般主从的延迟都是
 在1s 左右，但尽管这样，还是有可能会读取到过期的数据，毕竟不能严格控制延迟在1s内，
+
+
 
 ##### 判断主备延迟
 
@@ -903,6 +1006,8 @@ retrived_gtid_set, 备库收到的日志 GTID 集合
 executed_gtid_set，备库已经执行完的 GTID 集合， 
 ```
 
+
+
 ##### semi-sync
 
 semi-sync 解决了事务提交后但还没传给从库的问题
@@ -913,6 +1018,8 @@ semi-sync 解决了事务提交后但还没传给从库的问题
 
 semi + 断电判断在一主一备的场景是成立的，但在一主多从的场景中，因为 semi-sync 只要等到一个从库的 ack，
 就给客户端返回确认，但如果查询的时候不是这个返回 ack 的从库，就无法确保读到最新的数据，还是会过期读。
+
+
 
 ##### 等主库位点
 
@@ -930,10 +1037,14 @@ select wait_for_executed_gtid_set(gtid_set, 1)
 主动等待，直到这个库执行的事务中包含传入的 gtid_set，返回0，超时为1
 ```
 
+
+
 #### 数据库出问题
 
 并发连接：具体的客户端连接数，查询通过 `show processlist`
 并发查询：在事务中的实际查询数，`set global innodb_thread_concurrency = 128`
+
+
 
 #### 误删数据
 
@@ -967,6 +1078,7 @@ kill 用于处理长时间等待其他事务中的锁的情况
 2. 给 session 的执行线程发一个信号
 
 
+
 #### 查询内存占用
 
 取数据和发数据过程：（边读边发）
@@ -979,6 +1091,7 @@ kill 用于处理长时间等待其他事务中的锁的情况
 
 InnoDB 内部使用的是最近最少使用（Least Recently Used，LRU）算法，按照 5:3 的比例将整个 LRU 链表分成了 
 young 区和 old 区。
+
 
 
 #### Join
@@ -1019,6 +1132,8 @@ left join：左边的表不一定是驱动表，
 
 MySQL 会在 InnoDB 中创建一个 frm 文件保存表结构定义，`#sql{进程_id}_{线程_id}_系列号` 的格式
 
+
+
 ##### 临时表 vs 内存表
 
 * 内存表：指的是使用 Memory 引擎得表，`create table ... engine=memory`。表得数据在内存中，系统重启得时候会被清空，
@@ -1047,6 +1162,7 @@ select id%10 as m, count(*) as c from t1 group by m;
     * 如果表中有主键为 x 的行，就将 x 这一行的 c 值+1
 3. 遍历完成之后，再根据字段 m 做排序，得到结果集返回给客户端
 ```
+
 
 
 #### Memory 引擎
@@ -1078,6 +1194,7 @@ Memory 引擎使用的是 hash 结构的存储方式, hash(id) -> 数据行，�
 * 持久化问题
 
 数据存放再内存中，虽然会访问速度快，但断电时数据会丢失。再主从架构下，会造成主从的数据不一致等问题。
+
 
 
 #### 拷贝数据
