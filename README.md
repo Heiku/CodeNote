@@ -1,6 +1,6 @@
 Note Java Knowledge Every Day
 
-[base](/Basic/base/base.md)  
+[base](/src/Basic/base/base.md)  
 [jvm](/src/Basic/jvm/jvm.md)  
 [gc](/src/Basic/jvm/gc.md)  
 [atomic](/src/Basic/cpu/atomic.md)  
@@ -17,6 +17,8 @@ Note Java Knowledge Every Day
 [mysql-sync](/src/mysql/mysql_sync.md)  
 [mysql_log](/src/mysql/mysql_application.md)  
 
+[mysql-book](/src/mysql/mysql_book.md)
+
 [cache](src/cache/cache.md)  
 [redis-struct](/src/redis/redis_struct.md)  
 [redis-store](/src/redis/redis_store.md)  
@@ -29,4 +31,4 @@ Note Java Knowledge Every Day
 
 [tcp/ip](/src/tcpip/tcpip.md)  
 
-[distributed](/src/distributed/distributed_base.md)e
+[distributed](/src/distributed/distributed_base.md)
