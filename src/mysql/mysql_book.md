@@ -274,4 +274,81 @@ mysql> EXPLAIN SELECT * FROM s1 INNER JOIN s2;
 
 * extra：
   * using index condition：索引条件下推，如果使用到了这个索引后，后续的条件虽然不能走索引，但可以根据索引得到的结果进行判断 `key > a and key likes %a` ，减少了回表判断带来的随机IO
-  * 
+
+  * using join buffer(Block Nested Loop)：在连接查询执行过程中，如果被驱动表 __不能有效利用索引__ 加快访问速度，MySQL 会为其分配一块名为 `join buffer`的内存块加快查询速度。
+
+  * using intersect(...)、using union、using sort_union
+
+    using intersect（取交集再回表），using union（并集），using sort_union（多了个排序）
+
+  * using filesort：无法使用到 __索引__，只能在内中（数据记录少）或者磁盘中（记录多）进行排序
+
+  * using temporary：在许多查询的执行过程中，MySQL 会借助临时表完成例如 __去重__、__排序__ 之类的功能，比如 `DISTINST`、`GROUP BY`、`UNION` 等子句的查询，`GROUP BY` 语句会被默认添加 `ORDER BY`，所以会在 explain extra 中看到 `using filesort`，所以如果不想排序的话，需要显式指定 `order by null`。注意：`GROUP BY` 能有效利用索引，如果对索引行进行分组操作，能避免使用到临时表的创建和维护，提升性能。
+
+  
+
+* 可以打开 `optimizer trace` 查看查询优化器对于查询的优化过程（找出可能使用到的索引，分析成本，再进行使用）
+
+
+
+
+
+## InnoDB 的 Buffer Pool
+
+[自己看一遍吧，很快的](https://juejin.cn/book/6844733769996304392/section/6844733770063429646)
+
+
+
+## redo 日志
+
+* redo log：
+
+  如果没有 redo log，最简单的做法就是在事务提交完成之前把事务所修改的所有页面都刷新到磁盘
+
+  * 刷新一个完整的数据页太浪费了：如果我们只修改一个数据页上的一个字节呢？
+  * 随机IO 刷起来速度太慢了：事务执行过程中，可能会涉及多个数据页的更新，包括了 聚簇索引、二级索引、目录页、系统页（rowid）等等
+
+* 优点：
+
+  * redo 日志占用空间非常小（表空间id、页号、修改偏移量）
+  * redo 日志是顺序写入磁盘的
+
+
+
+#### redo 日志格式
+
+* type：redo 日志类型
+* space id：表空间ID （因为 __buffer pool__ 是全局共享的，我们得通过 表空间好 + 页号确定唯一的页）
+* page number：页号
+* data：redo 日志的具体内容
+
+
+
+### Mini Transaction
+
+#### 以组 mtr 的形式写入 redo 日志
+
+在执行语句的过程中，产生的 redo 日志被划分成了若干个不可分割的 __组__（本质上是对 __底层页面的一次原子访问过程__ ），一个 `mtr` 可以包含一组 `redo` 日志，在崩溃恢复的时这一组 redo 日志作为一个不可分割的整体。比如以下几种情况都会被当作一个组（逻辑上是修改一个页，受关联影响会涉及多个页的修改）。
+
+* 更新 `Max Row ID` 属性时产生的 redo 日志是不可分割的
+* 向聚簇索引对应的 B+树 的页面插入一条记录时（可能产生页分裂，目录页修改）
+* 二级索引对应B+树插入记录
+* 等等...
+
+#### redo 刷盘时机
+
+* log buffer 空间不足：`innodb_log_buffer_size` 参数指定，如果 log buffer 中日志总量已经占用一半左右，那么刷盘吧
+* 事务提交：`innodb_flush_log_at_trx_commit`
+* 后台线程刷盘：每秒自己刷一次
+* 正常关闭服务器
+* checkpoint：循环写，保存之前的状态
+
+
+
+#### Log Sequence Number
+
+`log buffer` 会被划分成多个页（block），每个 `block` 的大小为 512kb， 每个 `block` 的格式为 `log block header(16K)`，`log block bofy`（实际的日志内容）、`log block trailer(4K)` 。
+
+
+
+`LSN` 是记录已经写入的 redo 日志量，在向 `log buffer`  中写入 redo 日志的时候，是按照 `mtr` 生成的一组 redo 日志为单位进行写入。那么，在统计 `lsn` 的增长量时，是按照 __实际写入日志量__ + `log block header` + `log block tailer` 来计算。`flushed_to_disk_lsn` 用来记录已经写入磁盘得日志偏移。
