@@ -14,11 +14,11 @@ import java.util.concurrent.TimeUnit;
  */
 @Warmup(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
 @Measurement(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
+@BenchmarkMode(Mode.AverageTime)
+@OutputTimeUnit(TimeUnit.MICROSECONDS)
 public class BoxTest {
 
     @Benchmark
-    @BenchmarkMode(Mode.AverageTime)
-    @OutputTimeUnit(TimeUnit.MICROSECONDS)
     public void addBox() {
         Long sum = 0L;
         for (int i = 0; i < 1000000000; i += 10) {
@@ -27,8 +27,6 @@ public class BoxTest {
     }
 
     @Benchmark
-    @BenchmarkMode(Mode.AverageTime)
-    @OutputTimeUnit(TimeUnit.MICROSECONDS)
     public void addUnBox() {
         long sum = 0L;
         for (int i = 0; i < 1000000000; i += 10) {

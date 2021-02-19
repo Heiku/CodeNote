@@ -11,7 +11,7 @@
 
 ### hashCode()
 
-对象的 hashCode 作为对象的唯一标识符
+对象的 hashCode 作为对象的唯一标识符，可以被重写，而 System.identityHashCode() 可以直接返回对象地址（不管是否被重写 hashCode()）
 
 Object 对象将返回对象的内存地址  
 
