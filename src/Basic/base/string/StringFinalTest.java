@@ -1,4 +1,4 @@
-package Basic.base;
+package Basic.base.string;
 
 /**
  * https://juejin.im/post/6844904191324864520

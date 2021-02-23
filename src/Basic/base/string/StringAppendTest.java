@@ -1,4 +1,4 @@
-package Basic.base;
+package Basic.base.string;
 
 /**
  * @Author: Heiku
