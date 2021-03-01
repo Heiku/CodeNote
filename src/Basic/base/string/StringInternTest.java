@@ -51,4 +51,16 @@ public class StringInternTest {
         s.intern();
         System.out.println(s3 == s4);
     }
+
+    @Test
+    public void test3() {
+        // 1. new String 只在堆中创建 def
+        // 2. s.intern()，发现常量池中没有 def，在常量池中生成 def，然后将 s2的引用指向常量池的def
+        // 3. s3常量定义优先去常量池找，发现有，那么直接返回常量池def地址
+        // 所以 s2 == s3
+        String s = "def";
+        String s2 = s.intern();
+        String s3 = "def";
+        System.out.println(s2 == s3);
+    }
 }
