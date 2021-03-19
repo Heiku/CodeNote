@@ -88,7 +88,7 @@ RDB 文件，将自己的数据库状态更新至主服务器执行 BGSAVE 命�
 导致从库处理写请求数据慢，这时 buffer 会快速增长，导致 OOM，`client-output-buffer-limit`限制 buffer 大小，如果超过限制，
 主库强制断开连接，等中断恢复后重新发起复制请求
 
-[同步情况](https://time.geekbang.org/column/article/272852)
+[https://time.geekbang.org/column/article/272852](同步情况)
 
 SYNC 命令（十分消耗资源的操作）：  
 1. 主服务器需要执行 `BGSAVE` 命令生成 RDB 文件，这个生成操作会消耗主服务器大量的 CPU、内存和磁盘 I/O 资源
@@ -199,7 +199,7 @@ Sentinel 就会从服务器判定为客观下线，并对主服务器执行故�
 主从变更完成之后，sentinel 会将新主库的地址写入自己实例的 PubSub，客户端需要订阅这个 pubsub，以便获取变更的新主节点的地址信息，
 但如果客户端因为某些原因错过哨兵通知，那么就需要主动向哨兵集群获取最新实例信息，Codis 就有这样的实现。
 
-[具体投票过程](https://time.geekbang.org/column/article/275337)
+[https://time.geekbang.org/column/article/275337](具体投票过程)
 
 ### 集群
 
@@ -246,5 +246,24 @@ ASK 错误与 MOVED 错误的区别（临时重定向和永久重定向）:
 5. 新的主节点开始接收和自己负责处理的槽有关的命令请求，故障转移完成。
 
 
+#### 总结
+
+Redis cluster 目的就是为了解决单个节点数据量大，写入量大产生的性能瓶颈的问题。由多个节点组成集群，可以提高集群的性能和可靠性，
+但产生了两个核心问题：请求路由、数据迁移
+
+1. 请求路由：采用哈希槽的映射关系表找到指定节点，然后在这个节点上操作。
+
+Redis Cluster 每个节点都会记录完整的映射关系，同时也会发给客户端本地 __缓存__ 一份，便于客户端直接找到指定节点。而像 Codis 这类
+Redis Proxy，是在客户端和 redis 服务器之间建立一层代理，一个 proxy 维护多个 redis 实例，proxy 层维护了路由的转发逻辑，更容易管理，
+但多一层 proxy 会带来一定的性能损耗
+
+2. 数据迁移：当集群节点不足以支撑业务时，需要扩容节点，意味着节点间的数据需要做迁移，而迁移可能会影响到业务需求
+
+Redis Cluster 和 Codis 都需要服务端和客户端/Proxy层互相配合，迁移过程中，服务端针对迁移的key，需要让客户端或Proxy去新节点访问，
+这个过程为了保证业务在访问这些key时依旧不受影响，而且可以得到正确的结果。因为重定向的存在，访问迁移key的延迟会变大。等迁移完成之后，
+Redis Cluster 每个节点会更新路由映射表，同时通知给客户端更新本地缓存。而 Codis 会在 Proxy 层面更新路由表，客户端整个过程无感知。
+
+[https://time.geekbang.org/column/article/276545](分片机制)  
+[https://www.cnblogs.com/rjzheng/p/11430592.html](为什么Redis集群有16384个槽)  
 [https://www.jianshu.com/p/87e06d81b597](Redis Cluster详解)  
 [https://juejin.im/post/6844904002098823181](浅谈集群版Redis和Gossip协议)
