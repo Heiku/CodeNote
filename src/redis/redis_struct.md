@@ -23,22 +23,27 @@ len = 5
 
 优点：
 1. 杜绝了缓冲区溢出
-在 C string 有可能在s1 - s2 ，s1 在执行 strcat(dest, str) 的之前，忘记为 s1 分配足够的空间， str 有可能会溢出到 s2 的空间，
-导致 s2 保存的内容被意外地修改。sdscat() 会先判断空间是否足够，否则进行拼接操作。
+   在 C string 有可能在s1 - s2 ，s1 在执行 strcat(dest, str) 的之前，忘记为 s1 分配足够的空间， str 有可能会溢出到 s2 的空间，
+   导致 s2 保存的内容被意外地修改。sdscat() 会先判断空间是否足够，否则进行拼接操作。
 
-2. 减少修改字符串时带来的内存重分配次数
-为了避免 C string 在执行 strcat()/trim() 等操作会导致的 缓冲区溢出或是内存泄漏等问题，同时解决在扩容时的频繁内存分配字符串
-空间的问题，SDS 采用了 free 未使用空间（空间预分配策略）解决。  
-在扩展操作时，先检查未使用空间 free 是否足够，优先使用 free，避免了内存分配。在释放操作时，保留被释放的空间为 free，
-以便下次扩展时使用，如果长时间未使用，可以使用 sds api 释放对应的 free 空间避免了内存占用。
+2. 减少修改字符串时带来的内存重分配次数 为了避免 C string 在执行 strcat()/trim() 等操作会导致的 缓冲区溢出或是内存泄漏等问题，同时解决在扩容时的频繁内存分配字符串 空间的问题，SDS 采用了 free
+   未使用空间（空间预分配策略）解决。  
+   在扩展操作时，先检查未使用空间 free 是否足够，优先使用 free，避免了内存分配。在释放操作时，保留被释放的空间为 free， 以便下次扩展时使用，如果长时间未使用，可以使用 sds api 释放对应的 free
+   空间避免了内存占用。
 
 3. buf 可以保存二进制数据（二进制安全，不会对数据进行额外处理），同时兼容 C string
 
+#### sds 节省空间的优化(最好看看链接图)
+
+1. 当保存的是 long 类型整数时，RedisObject 中的指针将被直接替换成 int 数据，这样就不需要额外的指针指向整形数据，节省了指针带来的空间开销
+2. 当保存的是字符串数据，且字符串长度 <= 44 字节时，RedisObject 中的（元数据 + 指针 + sds）是一块连续的内存区域，避免了内存碎片。embstr模式。
+3. 当字符串大于 44 时，sds 的数据量开始变多，会给 sds 分配独立的空间，并用 RedisObject ptr 指向sds，raw模式。
+
+[https://time.geekbang.org/column/article/279649](redis sds)
 
 ### List
 
-`LRANGE integers 0 10` integers 列表键的底层实现就是一个链表，链表中的每个节点都保存了一个整数值。除了链表键之外，
-发布与订阅、慢查询、监视器等功能也使用到了链表。
+`LRANGE integers 0 10` integers 列表键的底层实现就是一个链表，链表中的每个节点都保存了一个整数值。除了链表键之外， 发布与订阅、慢查询、监视器等功能也使用到了链表。
 
 ```
 typedef struct listNode{
@@ -98,19 +103,26 @@ typedef struct dictEntry{
 } dictEntry;
 ```
 
-dict 中的 ht 属性是一个包含两个项的数组，数组中的每个项都是一个 dictht 哈希表，一般情况下，字典只使用 ht[0] 哈希表，
-ht[1] 哈希表只会在对 ht[0] 哈希表进行 rehash 时使用。
+dict 中的 ht 属性是一个包含两个项的数组，数组中的每个项都是一个 dictht 哈希表，一般情况下，字典只使用 ht[0] 哈希表， ht[1] 哈希表只会在对 ht[0] 哈希表进行 rehash 时使用。
 
-和 Java HashMap 中类似，Redis 的哈希表使用了链地址法 (separate chaining) 来解决键冲突，每个哈希表节点都有一个 next 指针，
-多个哈希表节点可以用 next 指针构成一个单向链表，被分配到同一索引上的多个节点可以用单向链表连接，解决了键冲突的问题。
+和 Java HashMap 中类似，Redis 的哈希表使用了链地址法 (separate chaining) 来解决键冲突，每个哈希表节点都有一个 next 指针， 多个哈希表节点可以用 next
+指针构成一个单向链表，被分配到同一索引上的多个节点可以用单向链表连接，解决了键冲突的问题。
+
+#### 具体格式
+
+1. 整个 redis 可以当作一个哈希表 ht
+2. 一个键值对在底层实现对应一个 dictEntry 结构体
+3. 键值在底层实现上都对应一个 RedisObject 结构体
+4. RedisObject 结构体上记录了 type，encoding，ptr，ptr指向实际存储的数据结构
 
 #### rehash
 
 // 负载因子 = 哈希表已保存的节点数量 / 哈希表大小  
 load_factor = ht[0].used / ht[0].size
 
-当一下条件红的任意一个被满足时，程序会自动对哈希表进行扩容操作：  
-1) 服务器目前没有在执行 `BGSAVE` or `BGREWRITEAOF` 命令，并且哈希表的负载因子 loadFactor >= 1  
+当一下条件红的任意一个被满足时，程序会自动对哈希表进行扩容操作(RDB 和 AOF 期间禁止)：
+
+1) 服务器目前没有在执行 `BGSAVE` or `BGREWRITEAOF` 命令，并且哈希表的负载因子 loadFactor >= 1
 2) 服务器目前正在执行 `BGSAVE` or `BGREWRITEAOF` 命，并且哈希表的负载因子 loadFactor >= 5，已经快要到达上限，立即扩容
 
 渐进式 rehash：rehash动作从 ht[0] -> ht[1], 整个过程是分多次、渐进式地完成地，因为当 hashmap 中保存地 entry 数据量大时，
@@ -384,5 +396,7 @@ obejct idletime key
 
 如果服务器打开了 maxmemory 选项，并且服务器用于回收内存的算法为 volatile-lru 或者是 allkeys-lru，那么当服务器
 占用的内存超过了 maxmemory 设置的上限值时，空转时长较高的那部分键会优先被服务器释放，从而回收内存。
+
+
 
 

@@ -1,34 +1,48 @@
+# Redis Application
 
+## 基础数据结构
 
-### Redis Application
+### string
 
-#### 基础数据结构
+Redis 字符串采用的是动态字符串（sds），可以修改的字符串。内部结构实现上类似于 Java 中的 ArrayList，采用预分配冗余空间的方式 减少内存的频繁分配。（键值对、计数）
 
-##### string
+### list
 
-Redis 字符串采用的是动态字符串（sds），可以修改的字符串。内部结构实现上类似于 Java 中的 ArrayList，采用预分配冗余空间的方式
-减少内存的频繁分配。（键值对、计数）
+Redis 列表相当于 Java 中的 linkedList(quickList/zipList)，所以在插入效率为 O(1)，但在删除查找为O(N)
 
-##### list
+实践：可以当作队列使用，rpush数据到 Redis，另一个客户端 lpop 取出数据进行消费。
 
-Redis 列表相当于 Java 中的 linkedList(quickList/zipList)，而不是数组，所以在插入效率为 O(1)，但在删除查找为O(N),
+* 缺点：没有 ack 机制和不支持多个消费者，没有 ack 机制会导致从 Redis 取出数据后，如果客户端处理失败了，取出的这个数据相当于丢失了， 无法重新消费，所以 list 队列适合对于丢失数据不敏感的业务场景。
 
-##### hash
+* 优点：内存操作，快简单
 
-类似于 Java 中的 HashMap，同样采用链表法存储碰撞的的元素。Redis 中的 rehash 采用的是渐进式的 rehash，rehash的同时，
-保留新旧两个 hash 结构，查询同时查两个结构，知道迁移的线程完成任务才替代。
+### hash
 
-##### Set
+类似于 Java 中的 HashMap，同样采用链表法存储碰撞的的元素。Redis 中的 rehash 采用的是渐进式的 rehash，rehash的同时， 保留新旧两个 hash 结构，查询同时查两个结构，知道迁移的线程完成任务才替代。
+
+### Set
 
 类似于 Java 中的 HashSet，字典中的所有 value 都是一个 NULL。
 
-##### ZSet
+### ZSet
 
-类似与 Java 中 SortedSet 和 HashMap 的结合。使用Set保证了 Value 的唯一性，使用map存储 value 对应的 score。
-内部通过跳跃表实现。
+类似与 Java 中 SortedSet 和 HashMap 的结合。使用Set保证了 Value 的唯一性，使用map存储 value 对应的 score。 内部通过跳跃表实现。
 
+### PubSub
 
-#### HyperLogLog
+Redis 提供的 PubSub，支持多个消费者进行消费，生产者每发布一条消息，多个消费者同时订阅消费。
+
+* 缺点：
+
+如果任意一个消费者挂了，等恢复过来，这期间的生产者数据就丢失了。PubSub 只是把数据发给在线的消费者，消费者一旦下线， 就会丢弃数据。另一个缺点是：PubSub 中的数据不支持数据持久化，如果 Redis 宕机，其他数据能通过 RDB
+和 AOF 恢复过来，但 PubSub不行， 本身就是基于内存的简单多播机制
+
+### Stream
+
+Redis 5.0 之后推出了 Stream 数据结构，鉴于 Kafka，弥补了 List 和 PusSub 的不足，支持了 持久化、ack机制、多个消费者、数据回溯消费， 基本上实现了队列中间件的大部分功能，比 List 和 PubSub
+更可靠。
+
+### HyperLogLog
 
 pfadd/pfcount: 分别为增加计数、获取计数。 存在一定的误差 0.8%。底层使用了 bitmap。
 
@@ -40,7 +54,7 @@ pfcount codehole
 pfmerge 合并多个 key 的计数
 ```
 
-#### 布隆过滤器
+### 布隆过滤器
 
 bf.add/bf.exists 用于在大量的数据中判断是否存在某个元素，会存在一定误差，可以调整 bf.reverse(error_rare, initial_size)
 错误率越低，所需要的空间越大。
@@ -49,16 +63,17 @@ bf.add/bf.exists 用于在大量的数据中判断是否存在某个元素，会
 
 每个布隆过滤器对应的数据结构就是 __一个大型的位数组__ 和 __几个无偏的 hash 函数__，无偏指的是能够把 hash 算的比较均匀。
 
-向布隆过滤器添加 key 时，会使用多个 hash() 对 key 进行 hash得出一个整数的索引值，然后对位数组取模运算的到下标位置，
-每个 hash() 都会得到不同的位置，再把这几个位都置为1 完成 add 操作。
+向布隆过滤器添加 key 时，会使用多个 hash() 对 key 进行 hash得出一个整数的索引值，然后对位数组取模运算的到下标位置， 每个 hash() 都会得到不同的位置，再把这几个位都置为1 完成 add 操作。
 
-查询存在的时候，操作一样，如果存在一个位为0，说明一定不存在。如果都为1，不一定存在，因为可能被 hash 冲突的原因可能被其他 key 
-修改为1。如果位数组比较稀疏，正确的概率就很大。如果数组拥挤，那么就容易误判。
+查询存在的时候，操作一样，如果存在一个位为0，说明一定不存在。如果都为1，不一定存在，因为可能被 hash 冲突的原因可能被其他 key 修改为1。如果位数组比较稀疏，正确的概率就很大。如果数组拥挤，那么就容易误判。
 
-#### GeoHash
+##### 应用：
 
-GeoHash 算法将二维的经纬度数据映射到一维的整数（二分切法-将二维数据不断切分，最后用二进制标识），所有的数据都在一条线上。
-内部结构为 zset
+实现是基于 string 数据结构及位运算，可以解决业务层缓存穿透的问题，而且内存占用非常小，操作简单高校。
+
+### GeoHash
+
+GeoHash 算法将二维的经纬度数据映射到一维的整数（二分切法-将二维数据不断切分，最后用二进制标识），所有的数据都在一条线上。 内部结构为 zset
 
 ```
 geoadd company 116.48105 39.996794 juejin
@@ -69,7 +84,7 @@ geodist company juejin ireader      计算距离
 georadiusbymember company ireader 20km count 3 asc      计算范围20公里的单位
 ``` 
 
-#### keys/scan
+### keys/scan
 
 keys 缺点：
 
@@ -113,7 +128,7 @@ note: 在生产环境中，尽量避免大 key，因为大 key 在迁移的过�
 redis-cli -h 127.0.0.1 -p 7001 --bigkeys -i 0.1 每隔 100 条 scan 指令就会休眠 0.1s
 ```
 
-#### transaction
+### transaction
 
 multi/exec/discard: 所有指令在 exec 之前不执行，而是缓存在服务器的事务队列中，直到exec指令，才开始执行事务队列。
 当事务中间执行失败后，后续指令仍能继续执行。
@@ -121,8 +136,7 @@ multi/exec/discard: 所有指令在 exec 之前不执行，而是缓存在服务
 watch 会在事务开始之前关注1或多个变量，当事务执行后，即服务器收到 exec 指令执行缓存的事务队列的时候，如果被 watch 
 的变量被修改了，exec 会返回事务失败。
 
-
-#### SDS
+### SDS
 
 Redis 字符串本质上就是一个字符数组，C 语言中的字符串是以 NULL 结尾的，`strlen()` 统计字符串长度的时候
 采用遍历的方式计算，O(n)。 
