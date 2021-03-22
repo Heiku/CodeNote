@@ -139,14 +139,23 @@ lastest_fork_usec:
 2. 持久化策略：在 slave 节点执行 RDB 备份（流量少时执行），非敏感数据可以关闭 AOF 和 AOF REWRITE
 3. 降低主从库全量同步的概率：适当调大 `repl-blacklog-size` 参数，避免主从全量同步
 
-
-
 ## AOF
 
-appendfsnyc everysec：（主线程和子线程双写盘）如果后台线程由于负载过高，导致 fsync 发生阻塞，迟迟不能返回，那么主线程在执行 write 系统调用时，也会被阻塞住，直到后台线程 fsync 执行完成后，主线程执行 write 才能成功。（AOF 赶上了 AOF rewrite）
-
-
+appendfsnyc everysec：（主线程和子线程双写盘）如果后台线程由于负载过高，导致 fsync 发生阻塞，迟迟不能返回，那么主线程在执行 write 系统调用时，也会被阻塞住，直到后台线程 fsync 执行完成后，主线程执行
+write 才能成功。（AOF 赶上了 AOF rewrite）
 
 优化：
 
-1. 开启 `no-appendfsync-on-rewrite = yes`，即在 aof rewrite 期间，将刷盘策略改成了 appendfsync none，虽然避免了磁盘的阻塞，但在 aof rewrite 期键会 __丢失数据__
+1. 开启 `no-appendfsync-on-rewrite = yes`，即在 aof rewrite 期间，将刷盘策略改成了 appendfsync none，虽然避免了磁盘的阻塞，但在 aof rewrite 期键会 __
+   丢失数据__
+
+### cpu
+
+context switch 是指线程的上下文切换，上下文是线程的运行时数据。在 CPU 多核的环境中，一个线程先在一个 CPU 核上运行，然后切换到另一个 CPU核上 运行，这时就会发生 context switch。context
+switch 发生后，Redis 主线程的运行时信息需要被重新加载到另一个 CPU核上，此时，另一个 CPU 核上 的L1、L2 缓存上，并没有 Redis 实例之前运行频繁访问的指令核数据。所以这些数据都需要通过 L3
+缓存、甚至是内存中加载。加载需要一定时间，且 Redis 实例 需要等待这个重新加载完成之后，才开始处理请求。
+
+在 CPU 多核场景下，Redis 实例被频繁调度到不同的 CPU 核上运行的话，那么对 Redis 实例的请求处理时间影响更大。每调度一次，一些请求就会受到
+运行时信息、指令和数据重新加载过程的影响，这就会导致某些请求的延迟明显高于其他请求。
+
+可以利用绑核 `taskset -c 0 ./redis-server`，将 Redis 实例绑定在 0 号核上。
