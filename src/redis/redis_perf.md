@@ -110,18 +110,35 @@ write 才能成功。（AOF 赶上了 AOF rewrite）
 
 优化：
 
-1. 开启 `no-appendfsync-on-rewrite = yes`，即在 aof rewrite 期间，将刷盘策略改成了 appendfsync none，虽然避免了磁盘的阻塞，但在 aof rewrite 期键
-可能会 __丢失数据__
-
+1. 开启 `no-appendfsync-on-rewrite = yes`，即在 aof rewrite 期间，将刷盘策略改成了 appendfsync none，虽然避免了磁盘的阻塞，但在 aof rewrite 期键 可能会 __
+   丢失数据__
 
 ### swap
 
-内存swap 是操作系统里将内存数据在内存核磁盘
+内存swap 是操作系统里将内存数据在内存和磁盘间来回换入和换出的机制，一旦触发 swap 机制，无论是被换入数据的进程还是被换出的数据进程， 其性能都会受到慢磁盘读写的影响。对于 Redis 这种内存数据库来说，Redis
+的请求操作需要等到磁盘数据读写完成才行，将会阻塞主 IO线程。
+
+触发 swap 的原因：物理机器内存数据不足
+
+* Redis 实例本身占用了大量的内存，导致物理机器的可用内存不足
+
+* Redis 实例同一机器上的其他进程在进行大量的 __文件读写操作__，这些操作会占用系统内存，增大了触发 swap 的概率。
+
+### 内存大页
+
+Linux 2.6.38 开始支持大页机制，支持 2MB 大小的内存页分配，而常规内存页分配按照 4KB 大小。
+
+因为 Redis 持久话过程中的会采用写时复制机制(RDB fork子进程)，一旦数据要更改，Redis 并不会直接修改内存中的数据， 而是将数据拷贝一份再进行修改。如果开启了内存大页机制，尽管客户端请求只修改了 100B
+的数据，却要为其分配 2MB 的大页， 导致 Redis 性能变慢。
+
+`cat /sys/kernel/mm/transparent_hugepage/enabled`
+
+[波动的延迟响应](https://time.geekbang.org/column/article/287819)
 
 ### cpu
 
-在多 CPU 架构下，一个应用程序访问所在 Socket 的本地内存和访问远端内存的延迟并不一致，应用程序在 多CPU 架构下，在 Socket 上调度时，
-需要通过 Socket内存进行访问，__远端内存访问__ 会增加应用程序的延迟。这个架构称为非统一内存访问架构（Non-Uniform Memory Access）NUMA架构。
+在多 CPU 架构下，一个应用程序访问所在 Socket 的本地内存和访问远端内存的延迟并不一致，应用程序在 多CPU 架构下，在 Socket 上调度时， 需要通过 Socket内存进行访问，__远端内存访问__
+会增加应用程序的延迟。这个架构称为非统一内存访问架构（Non-Uniform Memory Access）NUMA架构。
 
 多核CPU 和 多CPU 架构对比:
 
