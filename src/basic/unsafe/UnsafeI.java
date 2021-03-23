@@ -1,8 +1,5 @@
 package basic.unsafe;
 
-import sun.misc.Unsafe;
-
-import java.lang.reflect.Field;
 
 /**
  * @Author: Heiku
@@ -10,7 +7,7 @@ import java.lang.reflect.Field;
  */
 public class UnsafeI {
 
-    public static Unsafe getUnsafe(){
+   /* public static Unsafe getUnsafe(){
         Field f = null;         // reflect
         Unsafe unsafe = null;
 
@@ -24,5 +21,5 @@ public class UnsafeI {
             e.printStackTrace();
         }
         return unsafe;
-    }
+    }*/
 }

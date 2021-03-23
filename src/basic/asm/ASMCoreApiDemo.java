@@ -1,9 +1,5 @@
 package basic.asm;
 
-import jdk.internal.org.objectweb.asm.*;
-
-import java.io.FileInputStream;
-
 /**
  * @Author: Heiku
  * @Date: 2019/12/2
@@ -22,7 +18,7 @@ public class ASMCoreApiDemo {
      * @throws Exception
      */
     public static void main(String[] args)  throws Exception {
-        FileInputStream fis = new FileInputStream("target/classes/Basic/asm/ByteCodeDemo.class");
+        /*FileInputStream fis = new FileInputStream("target/classes/Basic/asm/ByteCodeDemo.class");
         ClassReader classReader = new ClassReader(fis);
         ClassWriter cw = new ClassWriter(classReader, ClassWriter.COMPUTE_MAXS);
 
@@ -41,7 +37,7 @@ public class ASMCoreApiDemo {
         };
 
         // ignore debug info
-        classReader.accept(classVisitor, ClassReader.SKIP_DEBUG);
+        classReader.accept(classVisitor, ClassReader.SKIP_DEBUG);*/
 
     }
 }

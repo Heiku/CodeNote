@@ -1,12 +1,5 @@
 package basic.asm;
 
-import jdk.internal.org.objectweb.asm.ClassReader;
-import jdk.internal.org.objectweb.asm.ClassWriter;
-import jdk.internal.org.objectweb.asm.Opcodes;
-import jdk.internal.org.objectweb.asm.tree.ClassNode;
-
-import java.io.FileInputStream;
-
 /**
  * @Author: Heiku
  * @Date: 2019/12/2
@@ -23,7 +16,7 @@ public class ASMTreeApiDemo {
      * @throws Exception
      */
     public static void main(String[] args) throws Exception {
-        FileInputStream fis = new FileInputStream("target/classes/Basic/asm/ByteCodeDemo.class");
+        /*FileInputStream fis = new FileInputStream("target/classes/Basic/asm/ByteCodeDemo.class");
 
         ClassReader reader = new ClassReader(fis);
         ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_MAXS);
@@ -33,6 +26,6 @@ public class ASMTreeApiDemo {
         reader.accept(classNode, ClassReader.SKIP_DEBUG);
         classNode.methods.forEach(methodNode -> System.out.println(methodNode.name));
 
-        classNode.accept(writer);
+        classNode.accept(writer);*/
     }
 }

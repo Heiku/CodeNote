@@ -1,11 +1,5 @@
 package basic.unsafe;
 
-import sun.misc.Unsafe;
-
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
-import java.util.HashSet;
-
 /**
  * use unsafe.objectFieldOffset get object size.(compute object field set)
  *
@@ -14,7 +8,7 @@ import java.util.HashSet;
  */
 public class SizeOfObject {
 
-    public static long sizeOf(Object obj){
+    /*public static long sizeOf(Object obj){
         Unsafe unsafe = UnsafeI.getUnsafe();
 
         HashSet<Field> fields = new HashSet<>();
@@ -43,11 +37,11 @@ public class SizeOfObject {
 
         // padding
         return ((maxSize / 8) + 1) * 8;
-    }
+    }*/
 
 
     public static void main(String[] args) {
-        SizeOfObject obj = new SizeOfObject();
-        System.out.println(SizeOfObject.sizeOf(obj));
+        /*SizeOfObject obj = new SizeOfObject();
+        System.out.println(SizeOfObject.sizeOf(obj));*/
     }
 }

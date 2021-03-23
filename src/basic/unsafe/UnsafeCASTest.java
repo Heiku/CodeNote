@@ -1,9 +1,6 @@
 package basic.unsafe;
 
 import lombok.Data;
-import sun.misc.Unsafe;
-
-import java.lang.reflect.Field;
 
 /**
  * @Author: Heiku
@@ -11,7 +8,7 @@ import java.lang.reflect.Field;
  */
 public class UnsafeCASTest {
     public static void main(String[] args) throws Exception {
-        Unsafe unsafe = UnsafeI.getUnsafe();
+        /*Unsafe unsafe = UnsafeI.getUnsafe();
 
         // use unsafe instance player object
         // but it will skipp construct method
@@ -38,7 +35,7 @@ public class UnsafeCASTest {
 
         // putIntVolatile, safety change field value, it can be seen for other thread
         unsafe.putIntVolatile(player, 12, 50);
-        System.out.println("after putIntVolatile change score value: " + player.getScore());
+        System.out.println("after putIntVolatile change score value: " + player.getScore());*/
     }
 }
 
