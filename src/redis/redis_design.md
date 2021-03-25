@@ -80,12 +80,35 @@ Transparent HugePages 的操作系统，每次写命令引起的复制内存页�
 allkeys-lru、volatile-ttl
 
 * volatile-lru: 从已设置过期时间的数据集（server.db[i].expires）中挑选最近最少使用的数据淘汰
-* volatile-ttl: 从已设置过期时间的数据集（server.db[i].expires）中挑选将要过期的数据淘汰
+* volatile-ttl: 从已设置过期时间的数据集（server.db[i].expires）针对过期时间的键值对，根据过期时间的先后进行删除，越早过期越先删除。
 * volatile-random: 从已设置过期时间的数据集（server.db[i].expires）中选择任意数据淘汰
+* volatile-lfu:
+
 * allkeys-lru: 从数据集（server.db[i].dict）中挑选最近最少使用的数据淘汰
 * allkeys-random: 从数据集（server.db[i].dict）中任意选择数据淘汰
-* no-enviction: 禁止驱逐数据
+* allkeys-lfu:
+* no-enviction: 禁止驱逐数据，一旦缓存被写满，Redis 将不再提供服务。
 
+
+##### LRU
+
+Redis 中，LRU算法做了简化，以减轻数据淘汰对缓存性能的影响。Redis默认会记录每个数据的最近一次的访问时间戳（RedisObject lru 字段）。
+然后，Redis 在决定淘汰数据时，第一次会随机挑选出 N 个数据，把它们作为一个候选集合。接下来比较这 N 个数据的 lru 字段，把 lru 最小
+的数据（时间戳）淘汰。
+
+`config set maxmemory-samples 100`，挑选的候补数据集大小
+
+当需要再次淘汰数据时，Redis 需要挑选数据进入上一次淘汰创建的候选集合，这时候挑选的标准是：能进入候选集合的数据的 lru 字段值必须
+小于候选集合中最小的 lru 值。当个数达到 N，那么开始淘汰最小的数据。（避免了将所有数据维护大链表，提升了缓存的性能）
+
+生产建议：
+
+1. 优先使用 `allkeys-lru`
+2. 如果业务应用的数据访问频率相差不大，且没有明显的冷热数据区分，建议使用 `allkeys-random`，随机淘汰就行，节省性能，
+但可能会出现这种情况（如果一个数据刚刚加载，因为内存不足被淘汰，下次访问又得重新冲数据库读完加载到缓存中）
+3. 如果业务有置顶需求（新闻、视频），可以使用 `volatile-lru`，同时不设置顶数据的过期时间，这样过期的数据就一直不会被删除。
+
+[替换策略：缓存满了怎么办？](https://time.geekbang.org/column/article/294640)
 
 ### 数据丢失问题
 
