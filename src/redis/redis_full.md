@@ -75,7 +75,7 @@ RDB 文件，将自己的数据库状态更新至主服务器执行 BGSAVE 命�
 4. 主服务器将记录在缓冲区里面的所有写命令发送给从服务器，从服务器执行这些写命令，将自己的数据库状态更新至主服务器数据库
 当前所处的状态
 
-注意：`repl_backlog_buffer` - `master_repl_offset` - `slave_repl_offset`
+注意：复制缓冲区 - 复制积压缓冲区 `repl_backlog_buffer` - `master_repl_offset` - `slave_repl_offset`
 
 1. 在从节点连接期间，主服务器会将这个过程中的命令记载 __环形缓冲区__ `repl_backlog_buffer`，主服务器会记录从服务器已经同步的缓冲器偏移 sync offset，
 当从服务器连接起来后，会将当前的 offset 发给主服务器 `psync {runId} {offset}`，主服务器再进行数据同步。
