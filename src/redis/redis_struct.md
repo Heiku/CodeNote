@@ -39,7 +39,7 @@ len = 5
 2. 当保存的是字符串数据，且字符串长度 <= 44 字节时，RedisObject 中的（元数据 + 指针 + sds）是一块连续的内存区域，避免了内存碎片。embstr模式。
 3. 当字符串大于 44 时，sds 的数据量开始变多，会给 sds 分配独立的空间，并用 RedisObject ptr 指向sds，raw模式。
 
-[https://time.geekbang.org/column/article/279649](redis sds)
+[redis sds](https://time.geekbang.org/column/article/279649)
 
 ### List
 

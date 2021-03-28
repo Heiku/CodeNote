@@ -88,9 +88,10 @@ RDB 文件，将自己的数据库状态更新至主服务器执行 BGSAVE 命�
 导致从库处理写请求数据慢，这时 buffer 会快速增长，导致 OOM，`client-output-buffer-limit`限制 buffer 大小，如果超过限制，
 主库强制断开连接，等中断恢复后重新发起复制请求
 
-[https://time.geekbang.org/column/article/272852](同步情况)
+[同步情况](https://time.geekbang.org/column/article/272852)
 
-SYNC 命令（十分消耗资源的操作）：  
+SYNC 命令（十分消耗资源的操作）：
+
 1. 主服务器需要执行 `BGSAVE` 命令生成 RDB 文件，这个生成操作会消耗主服务器大量的 CPU、内存和磁盘 I/O 资源
 2. 主服务器需要将自己生成的 RDB 文件发送给从服务器，这个发送操作会消耗主从服务器大量的网络资源（带宽和流量），并对从服务器
 相应命令请求的时间产生影响
@@ -260,10 +261,10 @@ Redis Proxy，是在客户端和 redis 服务器之间建立一层代理，一�
 2. 数据迁移：当集群节点不足以支撑业务时，需要扩容节点，意味着节点间的数据需要做迁移，而迁移可能会影响到业务需求
 
 Redis Cluster 和 Codis 都需要服务端和客户端/Proxy层互相配合，迁移过程中，服务端针对迁移的key，需要让客户端或Proxy去新节点访问，
-这个过程为了保证业务在访问这些key时依旧不受影响，而且可以得到正确的结果。因为重定向的存在，访问迁移key的延迟会变大。等迁移完成之后，
-Redis Cluster 每个节点会更新路由映射表，同时通知给客户端更新本地缓存。而 Codis 会在 Proxy 层面更新路由表，客户端整个过程无感知。
+这个过程为了保证业务在访问这些key时依旧不受影响，而且可以得到正确的结果。因为重定向的存在，访问迁移key的延迟会变大。等迁移完成之后， Redis Cluster 每个节点会更新路由映射表，同时通知给客户端更新本地缓存。而 Codis
+会在 Proxy 层面更新路由表，客户端整个过程无感知。
 
 [https://time.geekbang.org/column/article/276545](分片机制)  
 [https://www.cnblogs.com/rjzheng/p/11430592.html](为什么Redis集群有16384个槽)  
-[https://www.jianshu.com/p/87e06d81b597](Redis Cluster详解)  
+[https://www.jianshu.com/p/87e06d81b597](RedisCluster详解)  
 [https://juejin.im/post/6844904002098823181](浅谈集群版Redis和Gossip协议)
