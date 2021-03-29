@@ -89,6 +89,8 @@ typedef struct redisDb{
 一部分键的过期时间，并删除其中的过期键。
 
 
+[Redis key 过期源码](https://segmentfault.com/a/1190000022284698)
+
 ##### AOF、RDB、复制对键过期处理
 
 1. RDB
