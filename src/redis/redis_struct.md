@@ -359,6 +359,8 @@ zset 结构同时使用了跳跃表和字典来保存有序集合元素，但这
 zadd、zcard(return list node num includes value & score)、zcount、zrange、zrevrange、zrank、zrerank、zrem、zsocre
 ```
 
+[Redis skipList](http://zhangtielei.com/posts/blog-redis-skiplist.html)
+
 #### 内存引用
 
 C 语言并不具备自动内存回收功能，所以 Redis 在自己对象系统中构建了一个引用计数 (reference counting) 技术实现的内存回收机制。
