@@ -17,7 +17,7 @@ WAL（Write-Ahead Logging）：先写日志再写磁盘。
 
 
 
-#### bin log & redo log
+#### bin log & redo log 
 
 1. redo log 是 InnoDb 特有得，bin log 是 Mysql Server 层实现的，所有的引擎都可以使用。
 2. redo log 是物理日志，记录的是 “再某个数据页上做了什么修改”，binlog 是逻辑日志，记录的是这个语句的原始逻辑，比如 
@@ -380,6 +380,11 @@ innodb_file_per_table
 3. optimize table: recreate + analyze
 
 
+online ddl 使用 inplace 模式，是可以避免 MDL 写锁阻塞读锁（中间会降级，避免影响正常 DML 语句），但从库执行同步过来的 DDL 语句的时候，
+会阻塞进行中的 DML（MDL 写锁），所以会放大主从不一致的情况。
+
+[Mysql Online DDL](https://juejin.cn/post/6854573213167386637)  
+[Mysql Online DDL 过程](https://cloud.tencent.com/developer/article/1574126)
 
 #### count(*)
 
