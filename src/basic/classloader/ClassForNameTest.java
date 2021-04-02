@@ -19,7 +19,9 @@ public class ClassForNameTest {
     @Test
     public void testClassForName(){
         try {
-            Class.forName("basic.classloader.ClassForName");
+            for (int i = 0; i < 3; i++) {
+                Class.forName("basic.classloader.ClassForName");
+            }
         }catch (Exception e){
             e.printStackTrace();
         }

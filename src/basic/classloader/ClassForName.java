@@ -5,12 +5,11 @@ package basic.classloader;
  * @Date: 2019/11/26
  */
 public class ClassForName {
-
+    private static String staticFiled = staticMethod();
     static {
         System.out.println("invoke static block");
     }
 
-    private static String staticFiled = staticMethod();
 
     public static String staticMethod(){
         System.out.println("invoke static method");
