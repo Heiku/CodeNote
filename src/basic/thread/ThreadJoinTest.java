@@ -1,5 +1,7 @@
 package basic.thread;
 
+import java.util.Random;
+
 /**
  *
  * join():
@@ -38,12 +40,13 @@ public class ThreadJoinTest {
     static class MyThread extends Thread{
         @Override
         public void run() {
-            System.out.println("子线程执行完毕");
+            System.out.println("子线程: " + Thread.currentThread().getName() + "，开始执行");
             try {
-                Thread.sleep(1000);
+                Thread.sleep(new Random().nextInt(5) * 1000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
+            System.out.println("子线程: " + Thread.currentThread().getName() + "，执行完毕");
         }
     }
 }
