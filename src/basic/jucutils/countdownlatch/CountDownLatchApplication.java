@@ -21,8 +21,18 @@ public class CountDownLatchApplication {
         services.add(new DatabaseCheckService(latch));
 
         Executor executor = Executors.newFixedThreadPool(services.size());
-        services.forEach(service -> executor.execute(service));
+        services.forEach(executor::execute);
 
+        new Thread(() -> {
+            try {
+                latch.await();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            for (int i = 0; i < 3; i++) {
+                System.out.println("custom thread free");
+            }
+        }).start();
         latch.await();
         System.out.println("all service is start up");
     }
