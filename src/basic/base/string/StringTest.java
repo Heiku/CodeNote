@@ -32,7 +32,9 @@ public class StringTest {
          */
 
         // a.intern() 返回第一个 stringTable 中第一个的引用\
-
+        String j2 = "ja" + "va";
+        String j1 = "java";
+        System.out.println(j1 == j2);
 
     }
 }

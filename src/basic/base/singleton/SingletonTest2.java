@@ -6,9 +6,9 @@ package basic.base.singleton;
  */
 public class SingletonTest2 {
 
-    private volatile SingletonTest2 instance;
+    private static volatile SingletonTest2 instance;
 
-    public SingletonTest2 getSingleton() {
+    public static SingletonTest2 getInstance() {
         if (instance == null) {
             synchronized (SingletonTest2.class) {
                 if (instance == null) {

@@ -6,11 +6,11 @@ package basic.base.singleton;
  */
 public class SingletonTest1 {
 
-    public SingletonTest1 getSingleton() {
+    public static SingletonTest1 getInstance() {
         return SingletonHolder.instance;
     }
 
-    private static class SingletonHolder {
-        private static final SingletonTest1 instance = new SingletonTest1();
+    static class SingletonHolder {
+        private static SingletonTest1 instance = new SingletonTest1();
     }
 }
